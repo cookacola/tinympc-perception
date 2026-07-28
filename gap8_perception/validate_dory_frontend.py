@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from dory.Frontend_frameworks.NEMO.Parser import onnx_manager
@@ -15,6 +16,7 @@ def main():
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--app-dir", type=Path)
+    parser.add_argument("--expected-output-bytes", type=int, default=12800)
     args = parser.parse_args()
     config = {
         "BNRelu_bits": 32,
@@ -31,13 +33,11 @@ def main():
     # NEMO emits one golden activation per fused frontend node. Derive the
     # expected count from the parsed graph so architecture changes cannot
     # silently disable checksum validation or retain a stale layer count.
+    golden_count = 0
+    while (args.onnx.parent / f"out_layer{golden_count}.txt").is_file():
+        golden_count += 1
     golden_files_present = (
-        (args.onnx.parent / "input.txt").is_file()
-        and all(
-            (args.onnx.parent / f"out_layer{layer}.txt").is_file()
-            for layer in range(len(graph))
-        )
-        and not (args.onnx.parent / f"out_layer{len(graph)}.txt").exists()
+        (args.onnx.parent / "input.txt").is_file() and golden_count > 0
     )
     if golden_files_present:
         hardware_graph = gap8_backend(
@@ -63,13 +63,21 @@ def main():
             )
         )))
     final_node = hardware_graph[-1]
+    if golden_files_present and golden_count != len(hardware_graph):
+        raise RuntimeError(
+            "golden activation count %d does not match fused hardware nodes %d"
+            % (golden_count, len(hardware_graph))
+        )
     final_output_bytes = int(final_node.output_activation_memory)
     final_output_bits = int(final_node.output_activation_bits)
     final_checksums = list(getattr(final_node, "check_sum_out", []) or [])
-    if final_output_bits != 8 or final_output_bytes != 12800:
+    if (
+        final_output_bits != 8
+        or final_output_bytes != args.expected_output_bytes
+    ):
         raise RuntimeError(
-            "expected uint8 [40,40,8] terminal output, got bits=%d bytes=%d"
-            % (final_output_bits, final_output_bytes)
+            "expected uint8 terminal output with %d bytes, got bits=%d bytes=%d"
+            % (args.expected_output_bytes, final_output_bits, final_output_bytes)
         )
     if golden_files_present and (
         not final_checksums or int(final_checksums[0]) <= 0
@@ -89,8 +97,10 @@ def main():
         "gap8_l1_capacity_bytes": 64000,
         "gap8_final_output_bits": final_output_bits,
         "gap8_final_output_bytes": final_output_bytes,
+        "expected_final_output_bytes": args.expected_output_bytes,
         "gap8_final_output_checksums": final_checksums,
         "activation_checksums_loaded": golden_files_present,
+        "golden_activation_files": golden_count,
         "activation_checksums_skipped": not golden_files_present,
         "remaining_gate": (
             "compile generated C and run GVSOC/physical GAP8 parity"
@@ -114,6 +124,35 @@ def main():
             verbose_level="Last+Perf_final", perf_layer="No",
             optional="8bit", appdir=str(args.app_dir), prefix="gap8",
         )
+        network_source = args.app_dir / "src" / "gap8_network.c"
+        bounded = network_source.read_text()
+        bounded = re.sub(
+            r"#define L3_WEIGHTS_SIZE \d+",
+            "#define L3_WEIGHTS_SIZE 262144",
+            bounded,
+        )
+        bounded = re.sub(
+            r"#define L3_INPUT_SIZE \d+",
+            "#define L3_INPUT_SIZE 131072",
+            bounded,
+        )
+        bounded = re.sub(
+            r"#define L3_OUTPUT_SIZE \d+",
+            "#define L3_OUTPUT_SIZE 131072",
+            bounded,
+        )
+        network_source.write_text(bounded)
+        main_source = args.app_dir / "src" / "gap8_main.c"
+        main_text = re.sub(
+            r"size_t input_size = \d+;",
+            "size_t input_size = 131072;",
+            main_source.read_text(),
+        )
+        main_text = main_text.replace(
+            "pi_l2_free(l2_buffer, 417000);",
+            "pi_l2_free(l2_buffer, 417000);\n  pmsis_exit(0);",
+        )
+        main_source.write_text(main_text)
         makefile = args.app_dir / "Makefile"
         makefile.write_text(
             makefile.read_text()
