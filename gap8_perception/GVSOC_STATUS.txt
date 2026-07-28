@@ -1,0 +1,7 @@
+GVSOC final-layer checksum: NOT COMPLETED
+
+Slurm job 2683 was canceled after 38 minutes of continuous CPU simulation at
+the user's direction because the cycle-accurate run was taking too long. The
+integer parity gate, DORY frontend/tiling checks, NanoCockpit firmware build,
+and Crazyflie firmware build completed successfully. Do not interpret the
+included partial gvsoc_checksum.log as a successful final-layer checksum.

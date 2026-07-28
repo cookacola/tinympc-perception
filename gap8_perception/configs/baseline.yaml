@@ -1,0 +1,44 @@
+seed: 2026
+input_size: [160, 160]
+corner_size: [40, 40]
+danger_size: [20, 20]
+urgency_size: [20, 20]
+uncertainty_size: [20, 20]
+gate_head: true
+network_input:
+  fields: [hm01b0_monochrome]
+motion_conditioning:
+  location: controller_postprocessor
+  fields: [body_speed, horizon_s, latency_s]
+  image_outputs: [obstacle_presence, inverse_range, uncertainty]
+split_shards: {train: 40, validation: 5, test: 5}
+targets:
+  corner_sigma: 1.25
+  drone_radius_m: 0.10
+  safety_margin_m: 0.10
+  horizon_s: 1.0
+  state_speed_variants_mps: [0.5, 1.0, 5.0]
+  training_target: speed_independent_geometry
+  evaluation_speed_variants_mps: [0.5, 1.0, 5.0]
+  latency_s: 0.08
+  timestep_s: 0.05
+  acceleration_limit_mps2: 6.0
+  attitude_limit_deg: 35.0
+  method: calibrated_ray_candidate_motion_swept_sphere_aabb
+loss:
+  corner: 1.0
+  danger: 1.0
+  urgency: 0.25
+  uncertainty: 0.10
+  gate: 0.5
+  danger_dice: 0.5
+  gate_dice: 0.5
+  false_safe_positive_weight: 1.5
+optimizer:
+  name: AdamW
+  learning_rate: 0.002
+  weight_decay: 0.0001
+training:
+  epochs: 80
+  batch_size: 64
+  workers: 8

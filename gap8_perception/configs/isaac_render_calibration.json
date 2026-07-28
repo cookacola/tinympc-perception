@@ -1,0 +1,11 @@
+{
+  "camera_matrix": [
+    [183.24982104509663, 0.0, 80.0],
+    [0.0, 183.24982104509663, 80.0],
+    [0.0, 0.0, 1.0]
+  ],
+  "distortion_coefficients": [0.0, 0.0, 0.0, 0.0, 0.0],
+  "source": "Isaac Sim default camera: focal_length=24.0 mm, horizontal_aperture=20.955 mm, 160x160 render",
+  "formula": "fx = width * focal_length / horizontal_aperture",
+  "validation": "Known 0.45 m gate-opening corners project within about 1.24 px mean of semantic-raster corners on a 2,022-frame probe."
+}

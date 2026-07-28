@@ -1,0 +1,11 @@
+Run these commands on your laptop (not on the cluster):
+
+  rsync -av --progress -e 'ssh -p 2219' \
+    cchen@a2r-lab-server.dartmouth.edu:/home/cchen/isaacsim-workspace/workspace/gap8_download_bundle_hm01b0_v4/ \
+    ./gap8_download_bundle_hm01b0_v4/
+
+One exact integer-network sample only:
+
+  scp -P 2219 \
+    cchen@a2r-lab-server.dartmouth.edu:/home/cchen/isaacsim-workspace/workspace/gap8_download_bundle_hm01b0_v4/samples/integer/integer_prediction_0000.png \
+    .

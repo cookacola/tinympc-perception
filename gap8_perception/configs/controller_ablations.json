@@ -1,0 +1,38 @@
+{
+  "common": {
+    "selected_horizon_steps": [1, 2, 3, 4, 5, 6, 7, 8],
+    "lookahead_time_s": 0.3,
+    "pixel_margin_160": 4,
+    "slack_penalty": 10000,
+    "freeze_image_planes_within_solve": true,
+    "rebuild_on_each_perception_frame": true
+  },
+  "configurations": {
+    "A": {"name": "gate_reference_only"},
+    "B": {"name": "gate_plus_danger_waypoint", "use_danger_waypoint": true},
+    "C": {"name": "angular_velocity_halfspaces", "constraint_mode": "velocity"},
+    "D": {"name": "angular_lookahead_halfspaces", "constraint_mode": "lookahead"},
+    "E": {
+      "name": "lookahead_plus_urgency",
+      "constraint_mode": "lookahead",
+      "use_urgency": true
+    },
+    "F": {
+      "name": "metric_inverse_depth_baseline",
+      "constraint_mode": "metric",
+      "requires_metric_range": true
+    }
+  },
+  "metrics": [
+    "closed_loop_collision_rate",
+    "gate_completion_rate",
+    "minimum_obstacle_clearance_m",
+    "false_avoidance_interventions",
+    "average_constraint_slack",
+    "maximum_constraint_slack",
+    "mpc_solve_time_ms",
+    "sensitivity_to_speed",
+    "sensitivity_to_perception_latency",
+    "same_apparent_size_different_range_performance"
+  ]
+}

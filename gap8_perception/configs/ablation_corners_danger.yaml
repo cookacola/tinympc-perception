@@ -1,0 +1,4 @@
+name: corners_danger
+gate_head: false
+loss_weights: {corner: 1.0, danger: 1.0, urgency: 0.25, uncertainty: 0.10, gate: 0.0}
+deployment_outputs: [corner_heatmaps, danger_map, collision_urgency, uncertainty]

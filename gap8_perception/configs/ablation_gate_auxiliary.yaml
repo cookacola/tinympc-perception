@@ -1,0 +1,5 @@
+name: corners_danger_gate_auxiliary
+gate_head: true
+loss_weights: {corner: 1.0, danger: 1.0, urgency: 0.25, uncertainty: 0.10, gate: 0.5}
+deployment_outputs: [corner_heatmaps, danger_map, collision_urgency, uncertainty]
+note: Gate head contributes training supervision but is removed from deployment.
