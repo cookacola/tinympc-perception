@@ -83,11 +83,15 @@ def main():
                 "firmware/cf21bl.hex": args.crazyflie_build / "cf21bl.hex",
             }
         )
+    optional_graphs = (
+        ("encoder", "corner_head", "danger_head")
+        if args.shared
+        else ("corner", "danger")
+    )
     optional_sources = {
-        "dory/corner_gvsoc_checksum.log": args.export
-        / "corner_gvsoc_checksum.log",
-        "dory/danger_gvsoc_checksum.log": args.export
-        / "danger_gvsoc_checksum.log",
+        f"dory/{graph}_gvsoc_checksum.log": args.export
+        / f"{graph}_gvsoc_checksum_release.log"
+        for graph in optional_graphs
     }
     sources.update(
         {
