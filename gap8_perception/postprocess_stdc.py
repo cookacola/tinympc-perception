@@ -14,6 +14,7 @@ class GateDecision:
     corners_xy160: np.ndarray
     confidence: np.ndarray
     reason: str
+    recovered_corner: int | None = None
 
 
 def decode_corner_heatmaps(corner_probability: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -36,6 +37,7 @@ def validate_gate_geometry(
     confidence_threshold: float = 0.25,
     minimum_area_px2: float = 100.0,
     maximum_side_ratio: float = 6.0,
+    allow_three_corner_recovery: bool = True,
 ) -> GateDecision:
     corners = np.asarray(corners_xy160, dtype=np.float32)
     confidence = np.asarray(confidence, dtype=np.float32)
@@ -43,7 +45,30 @@ def validate_gate_geometry(
         return GateDecision(False, corners, confidence, "shape")
     if not np.isfinite(corners).all() or not np.isfinite(confidence).all():
         return GateDecision(False, corners, confidence, "nonfinite")
-    if (confidence < confidence_threshold).any():
+    confident = confidence >= confidence_threshold
+    recovered_corner = None
+    if confident.sum() == 3 and allow_three_corner_recovery:
+        recovered_corner = int(np.flatnonzero(~confident)[0])
+        # Ordered TL/TR/BR/BL corners obey this affine quadrilateral relation.
+        # It is exact for a parallelogram and a conservative approximation for
+        # the modest projective distortion expected from a race gate.
+        opposite = (recovered_corner + 2) & 3
+        previous = (recovered_corner - 1) & 3
+        following = (recovered_corner + 1) & 3
+        corners = corners.copy()
+        corners[recovered_corner] = (
+            corners[previous] + corners[following] - corners[opposite]
+        )
+        # Never extrapolate a missing corner outside the observed CNN crop.
+        if not (
+            0.0 <= corners[recovered_corner, 0] < 160.0
+            and 20.0 <= corners[recovered_corner, 1] < 140.0
+        ):
+            return GateDecision(
+                False, corners, confidence, "recovered_out_of_bounds",
+                recovered_corner,
+            )
+    elif not confident.all():
         return GateDecision(False, corners, confidence, "confidence")
     # Required semantic order: TL, TR, BR, BL.
     if not (
@@ -52,17 +77,24 @@ def validate_gate_geometry(
         and corners[0, 1] < corners[3, 1]
         and corners[1, 1] < corners[2, 1]
     ):
-        return GateDecision(False, corners, confidence, "ordering")
+        return GateDecision(
+            False, corners, confidence, "ordering", recovered_corner
+        )
     contour = corners.reshape(-1, 1, 2)
     if not cv2.isContourConvex(contour):
-        return GateDecision(False, corners, confidence, "nonconvex")
+        return GateDecision(
+            False, corners, confidence, "nonconvex", recovered_corner
+        )
     area = abs(float(cv2.contourArea(contour)))
     if area < minimum_area_px2:
-        return GateDecision(False, corners, confidence, "area")
+        return GateDecision(False, corners, confidence, "area", recovered_corner)
     sides = np.linalg.norm(corners - np.roll(corners, -1, axis=0), axis=1)
     if float(sides.max() / max(sides.min(), 1e-6)) > maximum_side_ratio:
-        return GateDecision(False, corners, confidence, "side_ratio")
-    return GateDecision(True, corners, confidence, "accepted")
+        return GateDecision(
+            False, corners, confidence, "side_ratio", recovered_corner
+        )
+    reason = "accepted_three_corners" if recovered_corner is not None else "accepted"
+    return GateDecision(True, corners, confidence, reason, recovered_corner)
 
 
 def gate_override_danger(
@@ -88,7 +120,8 @@ def gate_override_danger(
     center = polygon.mean(axis=0)
     vectors = polygon - center
     lengths = np.linalg.norm(vectors, axis=1, keepdims=True).clip(min=1e-6)
-    polygon -= vectors / lengths * float(inset_cells)
+    recovery_inset = 1 if decision.recovered_corner is not None else 0
+    polygon -= vectors / lengths * float(inset_cells + recovery_inset)
     mask = np.zeros((15, 20), dtype=np.uint8)
     cv2.fillConvexPoly(mask, np.rint(polygon).astype(np.int32), 1)
     output = danger.copy()

@@ -42,6 +42,15 @@ Thus a near object placed in the gate opening does not receive the gate
 permission. Runtime parameters `percept.gateOpen`, `gateThr`, `gateInset`,
 `gateCap`, `gateRange`, and `gateUnc` control this behavior.
 
+Exactly three confident ordered corners may recover the fourth with the
+affine quadrilateral relation. The recovered point must remain inside the
+observed crop and the completed polygon must pass the same ordering,
+convexity, area, and aspect checks as a four-corner detection. Two missing
+corners remain invalid. The decoder returns the recovered point to the
+landmark/PnP path and uses a tighter inset for its gate-opening permission map;
+the host-compiled audit measures 64 permission cells for the recovered test
+gate versus 81 for the fully observed gate.
+
 ## Package and build
 
 ```bash

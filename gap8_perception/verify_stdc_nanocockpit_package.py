@@ -58,11 +58,50 @@ int main(void) {
   if (count_value(obstacle, 255) != 400) return 14;
 
   memset(packed, 0, DANGER_OFFSET);
+  peak(packed, 0, 10, 5);
+  peak(packed, 1, 30, 5);
+  peak(packed, 3, 10, 25);
+  float recovered_corners[8];
+  uint8_t recovered_confidence[4];
+  gap8_decode_corner_argmax(
+      packed, recovered_corners, recovered_confidence);
+  if (gap8_validate_or_recover_gate(
+          recovered_corners, recovered_confidence) != 2 ||
+      recovered_corners[4] != 122.0f ||
+      recovered_corners[5] != 122.0f) return 15;
+  gap8_pool_control_maps(packed, obstacle, range, uncertainty, opening);
+  int recovered_opening_count = count_value(opening, 255);
+  if (recovered_opening_count < 25 ||
+      recovered_opening_count >= opening_count) return 16;
+
+  memset(packed, 0, DANGER_OFFSET);
+  peak(packed, 0, 10, 5);
+  peak(packed, 3, 10, 25);
+  gap8_pool_control_maps(packed, obstacle, range, uncertainty, opening);
+  if (count_value(opening, 255) != 0) return 17;
+
+  memset(packed, 0, DANGER_OFFSET);
+  peak(packed, 0, 10, 5);
+  peak(packed, 1, 30, 5);
+  peak(packed, 2, 5, 20);
+  gap8_decode_corner_argmax(
+      packed, recovered_corners, recovered_confidence);
+  if (gap8_validate_or_recover_gate(
+          recovered_corners, recovered_confidence) != -1 ||
+      recovered_corners[6] != 2.0f ||
+      recovered_corners[7] != 22.0f) return 18;
+  gap8_pool_control_maps(packed, obstacle, range, uncertainty, opening);
+  if (count_value(opening, 255) != 0) return 19;
+
+  memset(packed, 0, DANGER_OFFSET);
   for (int channel = 0; channel < 4; ++channel) peak(packed, channel, 20, 15);
   gap8_pool_control_maps(packed, obstacle, range, uncertainty, opening);
-  if (count_value(opening, 255) != 0) return 15;
+  if (count_value(opening, 255) != 0) return 20;
 
-  printf("{\"passed\":true,\"valid_gate_opening_cells\":%d}\n", opening_count);
+  printf(
+      "{\"passed\":true,\"valid_gate_opening_cells\":%d,"
+      "\"recovered_gate_opening_cells\":%d}\n",
+      opening_count, recovered_opening_count);
   return 0;
 }
 """
@@ -107,6 +146,11 @@ def verify(package: Path) -> dict:
                 "danger integer threshold boundary is exact",
                 "low-confidence geometry emits no opening",
                 "valid confident convex geometry emits an inset opening",
+                "reconstructed corner is returned to the landmark path",
+                "three confident ordered corners reconstruct a smaller opening",
+                "two missing corners emit no opening",
+                "out-of-bounds three-corner reconstruction emits no opening",
+                "rejected reconstruction leaves transmitted landmarks unchanged",
                 "degenerate phantom geometry emits no opening",
                 "gate permission never mutates the obstacle map in the decoder",
             ],

@@ -107,7 +107,7 @@ Integer gate precision is 0.9818 at its confidence threshold.
 
 DORY generated all three shared graphs successfully. DORY's maximum estimated live L1 tile
 is 36,289 bytes. The namespaced NanoCockpit pair builds into one GAP8 firmware
-image and uses 225,676 bytes of 512 kB static L2, including its bounded
+image and uses 226,300 bytes of 512 kB static L2, including its bounded
 180,000-byte directional workspace. A generated-allocation audit proves a
 153,984-byte peak (153,985 bytes required by DORY's strict allocator), leaving
 26,015 bytes of workspace margin. It center-crops the camera to 160x120, runs the encoder
@@ -168,6 +168,19 @@ The selected shared model's real-world classification overlays are under
 On the untouched in-crop flight-08 frames the overlay audit reproduces the
 12.79 px mean and 6.26 px median error. Danger colors on these images are
 explicitly visualization-only because the flights have no obstacle labels.
+
+The gate decoder also supports conservative three-of-four recovery. Exactly
+one corner may fall below its calibrated confidence threshold when the other
+three ordered corners reconstruct an in-crop quadrilateral that still passes
+ordering, convexity, area, and aspect checks. The missing corner is completed
+with the ordered affine quadrilateral relation; two missing corners are
+rejected. Recovered detections use a smaller permission opening than fully
+observed gates. On the unlabeled top-level `stream_out` capture this increases
+accepted geometry from 129 to 491 of 2,718 frames (362 recovered). On untouched
+flight 08, the recovered subset has 9.45 px median four-corner error and
+12.85 px median inferred-corner error. Because the unlabeled stream cannot
+measure false positives, physical use remains subject to the controller's
+range, staleness, and controlled-flight acceptance gates.
 
 The mocap audit also shows that these captures do not establish the 2 m/s
 racing requirement. Per-flight p95 translational speeds are only

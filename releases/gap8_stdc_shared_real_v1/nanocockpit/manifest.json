@@ -66,11 +66,30 @@
     "false_negative_rate": 0.007676203768318213,
     "iou": 0.8591228943066316
   },
+  "gate_geometry": {
+    "minimum_confident_corners": 3,
+    "three_corner_completion": "ordered affine parallelogram",
+    "recovered_corner_bounds_xy": [
+      0,
+      159,
+      20,
+      139
+    ],
+    "full_gate_corner_weight": 0.88,
+    "recovered_gate_corner_weight": 0.8,
+    "post_completion_checks": [
+      "ordering",
+      "convexity",
+      "area",
+      "aspect"
+    ],
+    "two_or_more_missing_policy": "reject"
+  },
   "memory": {
     "proven_peak_directional_allocator_bytes": 153984,
     "strict_allocator_required_bytes": 153985,
     "nanocockpit_workspace_configured_bytes": 180000,
-    "linked_static_l2_bytes": 225676,
+    "linked_static_l2_bytes": 226300,
     "linked_static_l2_includes_workspace": true,
     "dory_max_l1_tile_bytes": 36289
   },
