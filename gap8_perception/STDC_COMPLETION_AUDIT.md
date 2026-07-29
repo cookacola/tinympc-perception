@@ -24,7 +24,7 @@ acceptance; missing evidence is called out explicitly.
 | INT8 weights and activations | Passed in NeMO export | integer ONNX reports and decoded held-out predictions |
 | DORY operator support | Passed | Conv/ReLU/Add-only graphs; DORY frontend reports |
 | Less than 64 kB live L1 tile | Passed | maximum DORY tile estimate: 36,289 bytes |
-| 512 kB L2 firmware fit | Passed | linked shared NanoCockpit image: 226,300 bytes including 180,000-byte workspace; verified peak 153,984 bytes |
+| 512 kB L2 firmware fit | Passed | linked streaming shared NanoCockpit image: 242,476 bytes including 180,000-byte workspace; verified peak 153,984 bytes |
 | Safety-first false-negative behavior | Passed on held-out simulation | calibrated INT8 threshold 0.07227: recall 0.9923, FNR 0.00768 |
 | Gate false-positive priority | Passed on held-out simulation | shared INT8 gate precision 0.9871 |
 | Real-world gate training | Passed with clean split | flight 06 train, flight 07 validation, flight 08 untouched test |

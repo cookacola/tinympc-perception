@@ -30,7 +30,7 @@
     {
       "path": "nanocockpit/manifest.json",
       "bytes": 2353,
-      "sha256": "28bfa6dd5ba65c19b52320fa850b8ab7fe192b8c7f7b11833f121fe2257d5f4c",
+      "sha256": "5b4fef14e49f367bbe13ed9d4fb3523110946ca69045502914e7d133feabb934",
       "source": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared/manifest.json"
     },
     {
@@ -107,8 +107,8 @@
     },
     {
       "path": "nanocockpit/gap8-stdc-real-dory-shared.tar.gz",
-      "bytes": 162146,
-      "sha256": "348cd313ab9b8691b97c39e8e5eba758d1511455224bf18869f2c6e0b2654e90",
+      "bytes": 162155,
+      "sha256": "ff5357597b48ab8a4e72217a7c5cbfbd4cdd38d3e03ce5158f11f963e7f527a9",
       "source": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared"
     }
   ]

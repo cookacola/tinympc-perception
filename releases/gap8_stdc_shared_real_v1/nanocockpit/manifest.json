@@ -89,7 +89,7 @@
     "proven_peak_directional_allocator_bytes": 153984,
     "strict_allocator_required_bytes": 153985,
     "nanocockpit_workspace_configured_bytes": 180000,
-    "linked_static_l2_bytes": 226300,
+    "linked_static_l2_bytes": 242476,
     "linked_static_l2_includes_workspace": true,
     "dory_max_l1_tile_bytes": 36289
   },

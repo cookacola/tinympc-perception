@@ -580,7 +580,7 @@ APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
             "nanocockpit_workspace_configured_bytes": (
                 180000 if shared else 160000
             ),
-            "linked_static_l2_bytes": 226300 if shared else 207404,
+            "linked_static_l2_bytes": 242476 if shared else 207404,
             "linked_static_l2_includes_workspace": True,
             "dory_max_l1_tile_bytes": 36289,
         },
