@@ -1,0 +1,258 @@
+{
+  "root": "/home/cchen/real_flight_data",
+  "scope": "labeled, crop-valid, gate-positive frames only",
+  "flights": {
+    "flight_06": {
+      "frames": 4438,
+      "feature_quantiles": {
+        "intensity_mean": {
+          "p10": 0.37277511060237883,
+          "median": 0.4136960059404373,
+          "p90": 0.5842700600624084
+        },
+        "intensity_std": {
+          "p10": 0.22029981911182403,
+          "median": 0.2455601543188095,
+          "p90": 0.3017293751239777
+        },
+        "intensity_p10": {
+          "p10": 0.08627451211214066,
+          "median": 0.10588235408067703,
+          "p90": 0.16862745583057404
+        },
+        "intensity_median": {
+          "p10": 0.3450980484485626,
+          "median": 0.3803921639919281,
+          "p90": 0.6000000238418579
+        },
+        "intensity_p90": {
+          "p10": 0.6705882549285889,
+          "median": 0.7568627595901489,
+          "p90": 1.0
+        },
+        "gradient_mean": {
+          "p10": 0.33389643728733065,
+          "median": 0.3867045044898987,
+          "p90": 0.447324076294899
+        },
+        "gate_center_x": {
+          "p10": 0.4577640503644943,
+          "median": 0.566656231880188,
+          "p90": 0.6735187411308289
+        },
+        "gate_center_y": {
+          "p10": 0.3993750214576721,
+          "median": 0.43055209517478943,
+          "p90": 0.46110210120677947
+        },
+        "gate_width": {
+          "p10": 0.23944053947925567,
+          "median": 0.3035411983728409,
+          "p90": 0.4409773111343384
+        },
+        "gate_height": {
+          "p10": 0.3757782369852066,
+          "median": 0.4703916311264038,
+          "p90": 0.6435273468494416
+        },
+        "gate_area": {
+          "p10": 0.09271483993530275,
+          "median": 0.1333923085530599,
+          "p90": 0.27718391927083336
+        },
+        "gate_aspect": {
+          "p10": 0.7112534165382385,
+          "median": 0.894034743309021,
+          "p90": 0.9970784306526184
+        },
+        "top_bottom_width_ratio": {
+          "p10": 0.9708783209323884,
+          "median": 0.9989822506904602,
+          "p90": 1.0338989734649657
+        },
+        "left_right_height_ratio": {
+          "p10": 0.6523382544517518,
+          "median": 1.0540502071380615,
+          "p90": 1.440875196456909
+        }
+      }
+    },
+    "flight_07": {
+      "frames": 3833,
+      "feature_quantiles": {
+        "intensity_mean": {
+          "p10": 0.3678562164306641,
+          "median": 0.42066705226898193,
+          "p90": 0.5902484297752381
+        },
+        "intensity_std": {
+          "p10": 0.21499578952789306,
+          "median": 0.25964173674583435,
+          "p90": 0.3102514624595642
+        },
+        "intensity_p10": {
+          "p10": 0.08627451211214066,
+          "median": 0.10980392247438431,
+          "p90": 0.19607843458652496
+        },
+        "intensity_median": {
+          "p10": 0.3294117748737335,
+          "median": 0.38823530077934265,
+          "p90": 0.5803921818733215
+        },
+        "intensity_p90": {
+          "p10": 0.6627451181411743,
+          "median": 0.8078431487083435,
+          "p90": 1.0
+        },
+        "gradient_mean": {
+          "p10": 0.3416670024394989,
+          "median": 0.393446147441864,
+          "p90": 0.4393175899982453
+        },
+        "gate_center_x": {
+          "p10": 0.45838751792907717,
+          "median": 0.5676249861717224,
+          "p90": 0.6452187895774841
+        },
+        "gate_center_y": {
+          "p10": 0.3906749963760376,
+          "median": 0.42770829796791077,
+          "p90": 0.6032083034515383
+        },
+        "gate_width": {
+          "p10": 0.24067253172397612,
+          "median": 0.35996007919311523,
+          "p90": 0.5102444291114807
+        },
+        "gate_height": {
+          "p10": 0.33484781384468076,
+          "median": 0.49935945868492126,
+          "p90": 0.6909061551094056
+        },
+        "gate_area": {
+          "p10": 0.08030809783935547,
+          "median": 0.18064366658528647,
+          "p90": 0.3525903422037761
+        },
+        "gate_aspect": {
+          "p10": 0.7998628377914428,
+          "median": 0.9795404672622681,
+          "p90": 1.0014050960540772
+        },
+        "top_bottom_width_ratio": {
+          "p10": 0.9704561114311219,
+          "median": 1.0023273229599,
+          "p90": 1.0305794954299927
+        },
+        "left_right_height_ratio": {
+          "p10": 0.752005684375763,
+          "median": 0.9578359723091125,
+          "p90": 1.2811296939849854
+        }
+      }
+    },
+    "flight_08": {
+      "frames": 3045,
+      "feature_quantiles": {
+        "intensity_mean": {
+          "p10": 0.5426021218299866,
+          "median": 0.5656766891479492,
+          "p90": 0.6051507592201233
+        },
+        "intensity_std": {
+          "p10": 0.27408103346824647,
+          "median": 0.2888997495174408,
+          "p90": 0.3031222641468048
+        },
+        "intensity_p10": {
+          "p10": 0.1764705926179886,
+          "median": 0.19607843458652496,
+          "p90": 0.23137255012989044
+        },
+        "intensity_median": {
+          "p10": 0.5058823823928833,
+          "median": 0.545098066329956,
+          "p90": 0.615686297416687
+        },
+        "intensity_p90": {
+          "p10": 1.0,
+          "median": 1.0,
+          "p90": 1.0
+        },
+        "gradient_mean": {
+          "p10": 0.3383781731128693,
+          "median": 0.3619635999202728,
+          "p90": 0.4185700654983521
+        },
+        "gate_center_x": {
+          "p10": 0.4891749739646912,
+          "median": 0.5931406021118164,
+          "p90": 0.644237506389618
+        },
+        "gate_center_y": {
+          "p10": 0.3981041431427002,
+          "median": 0.4324791729450226,
+          "p90": 0.5705166935920714
+        },
+        "gate_width": {
+          "p10": 0.20540856719017028,
+          "median": 0.24316444993019104,
+          "p90": 0.45997212529182435
+        },
+        "gate_height": {
+          "p10": 0.2870482265949249,
+          "median": 0.33208638429641724,
+          "p90": 0.6412463545799255
+        },
+        "gate_area": {
+          "p10": 0.05902331288655599,
+          "median": 0.08083121617635092,
+          "p90": 0.28889759318033853
+        },
+        "gate_aspect": {
+          "p10": 0.802424967288971,
+          "median": 0.982038140296936,
+          "p90": 1.006512427330017
+        },
+        "top_bottom_width_ratio": {
+          "p10": 0.9871362447738647,
+          "median": 1.0125126838684082,
+          "p90": 1.0337203741073608
+        },
+        "left_right_height_ratio": {
+          "p10": 0.6819399714469909,
+          "median": 0.9746615886688232,
+          "p90": 1.1418112039566037
+        }
+      }
+    }
+  },
+  "between_flight_shift": {
+    "chance_flight_identification_accuracy": 0.3333333333333333,
+    "appearance_only_temporal_block_accuracy": 0.46633085896076354,
+    "pose_only_temporal_block_accuracy": 0.44803817603393425,
+    "all_features_temporal_block_accuracy": 0.44839165782962176,
+    "maximum_pairwise_standardized_mean_difference": {
+      "intensity_mean": 1.223123033491765,
+      "intensity_std": 0.9901053756273454,
+      "intensity_p10": 1.645222600741382,
+      "intensity_median": 1.080706978471355,
+      "intensity_p90": 1.2485274312941483,
+      "gradient_mean": 0.4921678228413073,
+      "gate_center_x": 0.2660670252843163,
+      "gate_center_y": 0.42923190748327944,
+      "gate_width": 0.6606402918378543,
+      "gate_height": 0.679067247604962,
+      "gate_area": 0.5871902088144071,
+      "gate_aspect": 0.6288059630619633,
+      "top_bottom_width_ratio": 0.3984926123096128,
+      "left_right_height_ratio": 0.43758364657447185
+    }
+  },
+  "interpretation": "Accuracy above chance shows that appearance and/or gate-pose statistics identify the source flight despite temporal blocking. This is evidence of domain shift, not a causal explanation.",
+  "mitigation": {
+    "implemented": "whole-flight splits plus training-only geometric, exposure, gamma, noise, blur, and horizontal-reflection augmentation",
+    "still_required": "collect independent tracks, lighting conditions, negative gate frames, and real obstacle/collision labels"
+  }
+}

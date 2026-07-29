@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "valid_gate_opening_cells": 81,
+  "format": "nanocockpit-stdc-output-decoder-audit-v1",
+  "package": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared",
+  "compiler": "gcc -std=c11 -Wall -Wextra -Werror",
+  "compile_stderr": "",
+  "checks": [
+    "unobserved crop rows are maximally dangerous",
+    "danger integer threshold boundary is exact",
+    "low-confidence geometry emits no opening",
+    "valid confident convex geometry emits an inset opening",
+    "degenerate phantom geometry emits no opening",
+    "gate permission never mutates the obstacle map in the decoder"
+  ]
+}

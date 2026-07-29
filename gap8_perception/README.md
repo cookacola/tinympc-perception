@@ -1,5 +1,35 @@
 # GAP8 multi-task drone-racing perception
 
+## Selected real-world deployment release
+
+The checked-in release under
+[`releases/gap8_stdc_shared_real_v1`](../releases/gap8_stdc_shared_real_v1)
+is the selected shared-encoder INT8 deployment. It includes the real-adapted
+checkpoint, held-out synthetic and real-flight metrics, three DORY integer
+graphs and reports, the NanoCockpit network archive, L2/decoder audits, and
+the validated Crazyflie firmware images.
+
+Selection used flight 06 for training, flight 07 for validation, and untouched
+flight 08 for final testing. The selected model has 102,933 parameters and
+18,679,680 MACs. On flight 08 it achieved 12.79 px mean and 6.26 px median
+corner error with a 0.927 gate-detection rate. The calibrated INT8 danger
+threshold achieved 0.9923 recall on held-out synthetic labels. Available real
+flights contain no obstacle labels, so this is not presented as real-world
+danger validation.
+
+Every included artifact is recorded with its byte count and SHA-256 digest in
+[`release_manifest.json`](../releases/gap8_stdc_shared_real_v1/release_manifest.json).
+To copy the release from a checkout:
+
+```bash
+rsync -avP releases/gap8_stdc_shared_real_v1/ \
+  USER@HOST:DESTINATION/
+```
+
+See [`STDC_DESIGN_STATUS.md`](STDC_DESIGN_STATUS.md) and
+[`STDC_COMPLETION_AUDIT.md`](STDC_COMPLETION_AUDIT.md) for the complete design,
+selection, deployment, and acceptance evidence.
+
 This project trains a 160x160 monochrome, GAP8-oriented CNN with:
 
 - four ordered 40x40 corner heatmaps: top-left, top-right, bottom-right,
