@@ -152,13 +152,19 @@ def main():
             "pi_l2_free(l2_buffer, 417000);",
             "pi_l2_free(l2_buffer, 417000);\n  pmsis_exit(0);",
         )
+        main_text = main_text.replace(
+            "  pi_time_wait_us(10000);",
+            "#ifndef DORY_CHECKSUM_HARNESS\n"
+            "  pi_time_wait_us(10000);\n"
+            "#endif",
+        )
         main_source.write_text(main_text)
         makefile = args.app_dir / "Makefile"
         makefile.write_text(
             makefile.read_text()
             + "\nDORY_CHECKSUM_HARNESS ?= 0\n"
             + "ifeq ($(DORY_CHECKSUM_HARNESS),1)\n"
-            + "APP_CFLAGS += -DVERBOSE\n"
+            + "APP_CFLAGS += -DVERBOSE -DDORY_CHECKSUM_HARNESS\n"
             + "endif\n"
         )
         generated_files = [path for path in args.app_dir.rglob("*") if path.is_file()]
