@@ -141,6 +141,14 @@ def main():
             "#define L3_OUTPUT_SIZE 131072",
             bounded,
         )
+        bounded = re.sub(
+            r'(#ifdef VERBOSE\n\s+printf\("Layer %s %d ended: \\n", '
+            r"Layers_name\[i\], i\);\n)"
+            r"(\s+if \(i == \d+\)\n\s+checksum\([^;]+;\n)"
+            r"(#endif)",
+            r"\1\3\n#ifdef DORY_CHECKSUM_HARNESS\n\2#endif",
+            bounded,
+        )
         network_source.write_text(bounded)
         main_source = args.app_dir / "src" / "gap8_main.c"
         main_text = re.sub(
@@ -164,7 +172,7 @@ def main():
             makefile.read_text()
             + "\nDORY_CHECKSUM_HARNESS ?= 0\n"
             + "ifeq ($(DORY_CHECKSUM_HARNESS),1)\n"
-            + "APP_CFLAGS += -DVERBOSE -DDORY_CHECKSUM_HARNESS\n"
+            + "APP_CFLAGS += -DDORY_CHECKSUM_HARNESS\n"
             + "endif\n"
         )
         generated_files = [path for path in args.app_dir.rglob("*") if path.is_file()]
