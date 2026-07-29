@@ -36,12 +36,24 @@ def parse_args():
         choices=("v1", "hm01b0_v2"),
         default="hm01b0_v2",
     )
+    parser.add_argument(
+        "--layout-family",
+        choices=("fixed_v1", "procedural_v1"),
+        default="fixed_v1",
+        help="Use deterministic per-shard course geometry for varied-track training.",
+    )
+    parser.add_argument(
+        "--gate-asset-root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "assets/gates",
+    )
     return parser.parse_args()
 
 
 args = parse_args()
 args.output_dir = args.output_dir.expanduser().resolve()
 args.camera_calibration = args.camera_calibration.expanduser().resolve()
+args.gate_asset_root = args.gate_asset_root.expanduser().resolve()
 camera_calibration = json.loads(args.camera_calibration.read_text())
 sys.argv = [sys.argv[0]]
 os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
@@ -70,13 +82,73 @@ if not extension_manager.set_extension_enabled_immediate(
     raise RuntimeError("failed to enable RTX sensor/lens-distortion schemas")
 
 CLASS_NAMES = ["background", "course", "boundary", "obstacle", "gate", "lab_clutter"]
-ASSET_ROOT = Path(__file__).resolve().parents[1] / "assets/gates"
+ASSET_ROOT = args.gate_asset_root
 GATE_TEXTURE_DIR = (
     ASSET_ROOT
     if args.gate_texture_version == "v1"
     else ASSET_ROOT / "newbeedrone_hm01b0_v2"
 )
 GATE_TEXTURE_SUFFIX = "v1" if args.gate_texture_version == "v1" else "v2"
+
+
+def sample_layout():
+    if args.layout_family == "fixed_v1":
+        return {
+            "family": "fixed_v1",
+            "seed": None,
+            "gates": [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55)],
+            "obstacles": [
+                (-0.55, 0.65, 0.30, 0.55, 0.55, 0.60),
+                (0.60, -0.65, 0.38, 0.50, 0.75, 0.76),
+            ],
+            "dome_intensity": 120.0,
+            "sun_intensity": 900.0,
+            "floor_palette": [(0.50, 0.24, 0.08), (0.68, 0.36, 0.12)],
+        }
+    layout_seed = args.seed + args.start_index
+    rng = np.random.default_rng(layout_seed)
+    gates = [
+        (
+            float(rng.uniform(-1.60, -1.05)),
+            float(rng.uniform(-1.10, 1.10)),
+            float(rng.uniform(0.45, 0.75)),
+        ),
+        (
+            float(rng.uniform(1.05, 1.60)),
+            float(rng.uniform(-1.10, 1.10)),
+            float(rng.uniform(0.45, 0.75)),
+        ),
+    ]
+    obstacles = []
+    while len(obstacles) < int(rng.integers(2, 5)):
+        x, y = rng.uniform(-1.25, 1.25, size=2)
+        if min(np.hypot(x - gate[0], y - gate[1]) for gate in gates) < 0.65:
+            continue
+        sx, sy = rng.uniform(0.30, 0.75, size=2)
+        if any(
+            abs(x - item[0]) < (sx + item[3]) / 2.0 + 0.15
+            and abs(y - item[1]) < (sy + item[4]) / 2.0 + 0.15
+            for item in obstacles
+        ):
+            continue
+        sz = float(rng.uniform(0.35, 0.95))
+        obstacles.append((float(x), float(y), sz / 2.0, float(sx), float(sy), sz))
+    hue = float(rng.uniform(-0.07, 0.07))
+    return {
+        "family": "procedural_v1",
+        "seed": layout_seed,
+        "gates": gates,
+        "obstacles": obstacles,
+        "dome_intensity": float(rng.uniform(65.0, 210.0)),
+        "sun_intensity": float(rng.uniform(450.0, 1350.0)),
+        "floor_palette": [
+            (0.50 + hue, 0.24 + hue / 2.0, 0.08),
+            (0.68 + hue, 0.36 + hue / 2.0, 0.12),
+        ],
+    }
+
+
+LAYOUT = sample_layout()
 
 
 def create_box(
@@ -152,9 +224,11 @@ def build_scene():
 
     rep.functional.create.xform(name="World")
     rep.functional.create.xform(parent="/World", name="Course")
-    rep.functional.create.dome_light(intensity=120, parent="/World", name="DomeLight")
+    rep.functional.create.dome_light(
+        intensity=LAYOUT["dome_intensity"], parent="/World", name="DomeLight"
+    )
     sun = UsdLux.DistantLight.Define(stage, "/World/Sun")
-    sun.CreateIntensityAttr(900.0)
+    sun.CreateIntensityAttr(LAYOUT["sun_intensity"])
     sun.CreateAngleAttr(1.0)
 
     # Lab floor plus one fixed, approximately 4 m x 4 m wooden-tile course.
@@ -166,7 +240,7 @@ def build_scene():
         for column in range(8):
             x = -1.75 + column * 0.5
             y = -1.75 + row * 0.5
-            wood = (0.50, 0.24, 0.08) if (row + column) % 2 else (0.68, 0.36, 0.12)
+            wood = LAYOUT["floor_palette"][(row + column) % 2]
             create_box(
                 f"WoodTile_{row}_{column}", (x, y, 0.0), (0.49, 0.49, 0.04),
                 "course", color=wood,
@@ -179,15 +253,15 @@ def build_scene():
     ]:
         create_box(name, position, scale, "boundary", color=(0.12, 0.12, 0.12))
 
-    # Exactly two obstacles.
-    create_box(
-        "Obstacle_0", (-0.55, 0.65, 0.30), (0.55, 0.55, 0.60),
-        "obstacle", color=(0.12, 0.28, 0.65),
-    )
-    create_box(
-        "Obstacle_1", (0.60, -0.65, 0.38), (0.50, 0.75, 0.76),
-        "obstacle", color=(0.68, 0.14, 0.10),
-    )
+    obstacle_colors = ((0.12, 0.28, 0.65), (0.68, 0.14, 0.10), (0.18, 0.58, 0.24))
+    for obstacle_index, obstacle in enumerate(LAYOUT["obstacles"]):
+        create_box(
+            f"Obstacle_{obstacle_index}",
+            obstacle[:3],
+            obstacle[3:],
+            "obstacle",
+            color=obstacle_colors[obstacle_index % len(obstacle_colors)],
+        )
 
     # Exactly two NewBeeDrone Micro Race Gate - Square assemblies.
     # Commercial listings describe an approximately 0.66 m outer square and
@@ -221,7 +295,7 @@ def build_scene():
             name=f"NewBeeDrone_{part.title()}_Material",
             parent="/World",
         )
-    for gate_index, (x_pos, y_center) in enumerate(((-1.30, -0.45), (1.30, 0.45))):
+    for gate_index, (x_pos, y_center, gate_center_z) in enumerate(LAYOUT["gates"]):
         gate_parent = f"/World/Course/Gate_{gate_index}"
         rep.functional.create.xform(parent="/World/Course", name=f"Gate_{gate_index}")
         for side, y_pos in (("Left", -gate_offset), ("Right", gate_offset)):
@@ -333,8 +407,7 @@ def sample_camera(rng):
     # Aim primarily at course features so the physically small micro gates and
     # both obstacles are well represented while retaining broad pose diversity.
     points = np.asarray(
-        [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55),
-         (-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)]
+        LAYOUT["gates"] + [obstacle[:3] for obstacle in LAYOUT["obstacles"]]
     )
     point_index = int(rng.integers(0, len(points)))
     target = points[point_index].copy()
@@ -357,7 +430,7 @@ def sample_camera(rng):
     x = float(np.clip(target[0] - distance * math.cos(azimuth), -1.85, 1.85))
     y = float(np.clip(target[1] - distance * math.sin(azimuth), -1.85, 1.85))
     if point_index < 2:
-        target[2] = float(np.clip(target[2], 0.42, 0.62))
+        target[2] = float(np.clip(target[2], 0.38, 0.80))
         z = float(np.clip(target[2] + rng.uniform(-0.15, 0.50), 0.28, 1.15))
     else:
         target[2] = float(np.clip(target[2], 0.18, 0.62))
@@ -375,7 +448,7 @@ def main():
                 "course_count": 1,
                 "course_extent_m": [4.0, 4.0],
                 "floor": "alternating wooden tiles",
-                "obstacle_count": 2,
+                "obstacle_count": len(LAYOUT["obstacles"]),
                 "gate_count": 2,
                 "gate_model": "NewBeeDrone Micro Race Gate - Square",
                 "gate_outer_size_m": [0.66, 0.66],
@@ -386,9 +459,21 @@ def main():
                     "appearance": "black fabric with HM01B0-visible honeycomb panels, seams, and white NewBeeDrone branding",
                     "atlas": "assets/gates/newbeedrone_hm01b0_v2/newbeedrone_square_atlas_v2.png",
                 },
-                "geometry": "fixed",
+                "geometry": LAYOUT["family"],
+                "layout": LAYOUT,
                 "outside_context": ["tables", "computers", "shelves"],
-                "randomized": ["camera_position", "camera_look_at"],
+                "randomized": [
+                    "camera_position",
+                    "camera_look_at",
+                    "gate_position",
+                    "gate_height",
+                    "obstacle_position",
+                    "obstacle_geometry",
+                    "lighting",
+                    "floor_palette",
+                ]
+                if args.layout_family == "procedural_v1"
+                else ["camera_position", "camera_look_at"],
                 "camera_calibration": camera_calibration,
                 "references": [
                     "https://newbeedrone.com/collections/all/products/newbeedrone-micro-race-gate-square",
