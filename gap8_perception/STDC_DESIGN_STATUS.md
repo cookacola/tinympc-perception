@@ -113,6 +113,11 @@ image and uses 225,676 bytes of 512 kB static L2, including its bounded
 26,015 bytes of workspace margin. It center-crops the camera to 160x120, runs the encoder
 once, rejects phantom gate geometry, and only emits an inset
 gate-opening permission map after confidence and geometry acceptance.
+The generated decoder is also compiled on the host with strict warnings and
+exercised at the integer danger threshold, with low-confidence, valid-convex,
+and degenerate phantom-gate cases. Its audit confirms that unobserved crop
+rows remain dangerous and that gate permission does not directly erase the
+obstacle map.
 
 The TinyMPC receiver consumes the calibrated conservative danger mask directly
 and increases risk for speed and stale-frame reach. Its host equivalence suite
