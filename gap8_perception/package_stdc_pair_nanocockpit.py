@@ -40,7 +40,7 @@ def c_float(value):
 
 def normalized_generated_text(text: str) -> str:
     """Keep generated sources deterministic and acceptable to git diff --check."""
-    return "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+    return "\n".join(line.rstrip() for line in text.splitlines()).rstrip() + "\n"
 
 
 def namespace_text(text: str, graph: str) -> str:
