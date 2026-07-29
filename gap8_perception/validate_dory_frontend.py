@@ -11,6 +11,20 @@ from dory.Hardware_targets.PULP.GAP8.HW_Parser import onnx_manager as gap8_backe
 from dory.Parsers.HW_node import HW_node
 
 
+def write_checksum_input_source(app_dir: Path):
+    data = (app_dir / "hex/gap8_inputs.hex").read_bytes()
+    rows = [
+        ", ".join(str(value) for value in data[start : start + 24])
+        for start in range(0, len(data), 24)
+    ]
+    (app_dir / "src/gap8_checksum_input.c").write_text(
+        "#include <stdint.h>\n"
+        "const uint8_t gap8_checksum_input[] = {\n  "
+        + ",\n  ".join(rows)
+        + "\n};\n"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--onnx", type=Path, required=True)
@@ -175,7 +189,36 @@ def main():
             "  pi_time_wait_us(10000);\n"
             "#endif",
         )
+        fixture_io = (
+            "  void *ram_input = ram_malloc(input_size);\n"
+            '      load_file_to_ram(ram_input, "gap8_inputs.hex");\n'
+            "      ram_read(l2_buffer, ram_input, l2_input_size);\n"
+            "      gap8_network_run(l2_buffer, 417000, l2_buffer, 0, initial_dir);\n"
+            "\n"
+            "  ram_free(ram_input, input_size);"
+        )
+        if fixture_io not in main_text:
+            raise RuntimeError("DORY main fixture-I/O template changed")
+        main_text = main_text.replace(
+            fixture_io,
+            "#ifdef DORY_CHECKSUM_HARNESS\n"
+            "  extern const uint8_t gap8_checksum_input[];\n"
+            "  for (size_t i = 0; i < l2_input_size; ++i)\n"
+            "    ((uint8_t *)l2_buffer)[i] = gap8_checksum_input[i];\n"
+            "#else\n"
+            "  void *ram_input = ram_malloc(input_size);\n"
+            '  load_file_to_ram(ram_input, "gap8_inputs.hex");\n'
+            "  ram_read(l2_buffer, ram_input, l2_input_size);\n"
+            "#endif\n"
+            "  gap8_network_run(l2_buffer, 180000, l2_buffer, 0, initial_dir);\n"
+            "#ifndef DORY_CHECKSUM_HARNESS\n"
+            "  ram_free(ram_input, input_size);\n"
+            "#endif",
+        )
+        main_text = main_text.replace("pi_l2_malloc(417000)", "pi_l2_malloc(180000)")
+        main_text = main_text.replace("pi_l2_free(l2_buffer, 417000)", "pi_l2_free(l2_buffer, 180000)")
         main_source.write_text(main_text)
+        write_checksum_input_source(args.app_dir)
         makefile = args.app_dir / "Makefile"
         makefile.write_text(
             makefile.read_text()

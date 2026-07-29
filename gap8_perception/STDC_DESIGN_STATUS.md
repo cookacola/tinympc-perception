@@ -125,7 +125,12 @@ passes 14/14 tests. The repository's Bitcraze builder container also completes
 the full `cf21bl` STM32 cross-build with the shared-model threshold: flash
 353,492/1,032,192 bytes, RAM 116,212/131,072 bytes, and CCM
 62,248/65,536 bytes. Remaining mandatory gates are the exact GVSOC
-checksum/latency run and physical track validation.
+checksum/latency run and physical track validation. The exact shared-graph
+audit links successfully with the verified 180,000-byte workspace and embeds
+the byte-identical checksum fixture to avoid harness-only HyperFlash input
+transfer. Encoder, corner-head, and danger-head GVSOC jobs 2848–2850 each
+remained CPU-bound for 30 minutes without reaching a terminal checksum, so no
+exact-checksum pass is claimed.
 
 ## Measured model results
 
