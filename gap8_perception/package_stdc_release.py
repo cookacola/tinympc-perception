@@ -25,21 +25,52 @@ def main():
     parser.add_argument("--integer", type=Path, required=True)
     parser.add_argument("--export", type=Path, required=True)
     parser.add_argument("--nanocockpit-package", type=Path, required=True)
+    parser.add_argument("--shared", action="store_true")
+    parser.add_argument("--bias-audit", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    integer_root = args.integer / "integer"
     sources = {
         "model/selected.pt": args.checkpoint,
         "metrics/synthetic_test.json": args.evaluation / "test_metrics.json",
         "metrics/real_flight08.json": args.evaluation / "real_flights.json",
-        "metrics/integer_heldout.json": args.integer / "heldout_parity_metrics.json",
-        "integer/nemo_report.json": args.integer / "integer/nemo_stdc_report.json",
-        "integer/corner_int.onnx": args.integer / "integer/corner/corner_int.onnx",
-        "integer/danger_int.onnx": args.integer / "integer/danger/danger_int.onnx",
-        "dory/corner_report.json": args.export / "corner_dory_report.json",
-        "dory/danger_report.json": args.export / "danger_dory_report.json",
+        "metrics/integer_heldout.json": integer_root / "heldout_parity_metrics.json",
         "nanocockpit/manifest.json": args.nanocockpit_package / "manifest.json",
     }
+    if args.shared:
+        sources.update(
+            {
+                "integer/nemo_report.json": args.integer
+                / "integer/nemo_stdc_shared_report.json",
+                "integer/encoder_int.onnx": args.integer
+                / "integer/encoder/encoder_int.onnx",
+                "integer/corner_head_int.onnx": args.integer
+                / "integer/corner_head/corner_head_int.onnx",
+                "integer/danger_head_int.onnx": args.integer
+                / "integer/danger_head/danger_head_int.onnx",
+                "dory/encoder_report.json": args.export / "encoder_dory_report.json",
+                "dory/corner_head_report.json": args.export
+                / "corner_head_dory_report.json",
+                "dory/danger_head_report.json": args.export
+                / "danger_head_dory_report.json",
+            }
+        )
+    else:
+        sources.update(
+            {
+                "integer/nemo_report.json": args.integer
+                / "integer/nemo_stdc_report.json",
+                "integer/corner_int.onnx": args.integer
+                / "integer/corner/corner_int.onnx",
+                "integer/danger_int.onnx": args.integer
+                / "integer/danger/danger_int.onnx",
+                "dory/corner_report.json": args.export / "corner_dory_report.json",
+                "dory/danger_report.json": args.export / "danger_dory_report.json",
+            }
+        )
+    if args.bias_audit:
+        sources["metrics/real_flight_bias.json"] = args.bias_audit
     optional_sources = {
         "dory/corner_gvsoc_checksum.log": args.export
         / "corner_gvsoc_checksum.log",
@@ -70,7 +101,14 @@ def main():
             }
         )
     package_archive = shutil.make_archive(
-        str(args.output / "nanocockpit/gap8-stdc-real-dory-pair"),
+        str(
+            args.output
+            / (
+                "nanocockpit/gap8-stdc-real-dory-shared"
+                if args.shared
+                else "nanocockpit/gap8-stdc-real-dory-pair"
+            )
+        ),
         "gztar",
         root_dir=args.nanocockpit_package.parent,
         base_dir=args.nanocockpit_package.name,
@@ -85,8 +123,10 @@ def main():
         }
     )
     manifest = {
-        "format": "gap8-stdc-real-release-v1",
-        "selected_model": "real_v3",
+        "format": "gap8-stdc-real-release-v2",
+        "selected_model": (
+            "shared_dory_frozen_real_v1" if args.shared else "real_v3"
+        ),
         "selection_note": (
             "flight-06 training, flight-07 selection, untouched flight-08 "
             "test; post-selection compressed refit was evaluated and rejected"

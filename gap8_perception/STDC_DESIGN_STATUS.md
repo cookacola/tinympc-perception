@@ -69,7 +69,7 @@ operator. Therefore PyTorch/QAT success is not called deployability: the graph
 must either pass an implemented frontend/kernel extension or be transformed
 to a numerically validated DORY-supported equivalent before completion.
 
-The implemented fallback is a distilled, resize-free DORY pair. The corner
+The first implemented fallback was a distilled, resize-free DORY pair. The corner
 graph retains the 40x30 stage-1 detail path. The danger graph retains the full
 stage-3 receptive field and emits a conservative 10x8 map; its supervision is
 max-reduced from 20x15 so a hazardous source cell cannot disappear through
@@ -77,6 +77,14 @@ averaging. Together the two sequential graphs measure 107,205 parameters and
 25,226,880 MACs. They contain only Conv/ReLU/Add and therefore fit the proven
 frontend operator surface. These are combined totals; reporting either graph
 alone would understate deployment cost.
+
+The selected deployment now removes that duplication with a shared
+32x30x40 encoder feeding separate corner and danger heads. It has 102,933
+parameters and 18,679,680 MACs, and its split graphs are numerically identical
+to the combined PyTorch graph. The corner path is initialized from and frozen
+to the validated real-adapted pair while the downstream danger stages are
+trained. This preserves the selected float real-flight metrics while reducing
+the deployed compute. All three graphs use only Conv/ReLU/Add.
 
 The selected pair is `gap8_stdc_dory_pair_real_v3/selected.pt`. Its held-out
 float danger recall is 0.9864 at threshold 0.5. On 512 deterministic images
@@ -87,17 +95,18 @@ precision 0.8668, and false-negative rate 0.00837. This reflects the design's
 explicit preference for obstacle false positives over false negatives.
 Integer gate precision is 0.9818 at its confidence threshold.
 
-DORY generated both graphs successfully. DORY's maximum estimated live L1 tile
+DORY generated all three shared graphs successfully. DORY's maximum estimated live L1 tile
 is 36,289 bytes. The namespaced NanoCockpit pair builds into one GAP8 firmware
-image, uses 207,404 bytes of 512 kB L2, center-crops the camera to 160x120,
-chains both graphs, rejects phantom gate geometry, and only emits an inset
+image, uses 225,676 bytes of 512 kB static L2 plus a bounded 180,000-byte
+directional workspace, center-crops the camera to 160x120, runs the encoder
+once, rejects phantom gate geometry, and only emits an inset
 gate-opening permission map after confidence and geometry acceptance.
 
 The TinyMPC receiver consumes the calibrated conservative danger mask directly
 and increases risk for speed and stale-frame reach. Its host equivalence suite
 passes 14/14 tests. Remaining mandatory gates are the exact GVSOC
-checksum/latency run (job 2814 remained CPU-bound for more than 30 minutes
-without producing a checksum), a full STM32 cross-build (the host currently lacks
+checksum/latency run (the current GVSOC jobs remain CPU-bound without a
+completed checksum), a full STM32 cross-build (the host currently lacks
 `arm-none-eabi-gcc`), and physical track validation.
 
 ## Measured model results
@@ -110,6 +119,8 @@ without producing a checksum), a full STM32 cross-build (the host currently lack
   precision, 0.986 danger recall.
 - Deployable INT8 pair, 512-image held-out safety audit: 0.9916 danger recall
   at the deployment threshold and 0.9818 gate precision.
+- Shared deployable INT8 model: 6.44 px synthetic corner error, 0.9871 gate
+  precision, and 0.9923 danger recall at its calibrated 0.07227 threshold.
 
 A post-selection rich-model refit on flights 06+07 improved untouched flight
 08 to 11.24 px mean error and 0.945 detection. Repeating that refit for the
@@ -118,6 +129,15 @@ localization to 20.57 px. It is therefore rejected rather than selected on
 detection alone; the deployed `real_v3` pair remains the safer evidence-backed
 choice. This gap is consistent with the measured between-flight domain shift
 and warrants more diverse real tracks before physical racing acceptance.
+
+The flight-bias audit confirms that concern: a temporal-block classifier can
+identify the source flight from appearance features at 0.466 accuracy versus
+0.333 chance, and the largest standardized feature shift is 1.65. Strong and
+mild label-preserving augmentation refits were tested against untouched
+flight 08, but each worsened mean localization, so augmentation is configurable
+but disabled by default. The next data collection must diversify tracks,
+lighting, cameras, and obstacles; the gate-only real set cannot validate the
+danger head.
 
 ## Reproduction
 
@@ -132,6 +152,7 @@ sbatch gap8_perception/run_stdc_dory_students.slurm
 sbatch gap8_perception/run_stdc_dory_evaluate.slurm
 sbatch gap8_perception/run_stdc_integer_parity.slurm
 sbatch gap8_perception/run_stdc_nemo_dory_export.slurm
+FREEZE_CORNER_PATH=1 sbatch gap8_perception/run_stdc_shared_dory.slurm
 ```
 
 Output roots are under `/home/cchen/isaacsim-workspace/workspace/`:
@@ -144,3 +165,5 @@ Output roots are under `/home/cchen/isaacsim-workspace/workspace/`:
 - `gap8_stdc_real_adapt_v2`
 - `gap8_stdc_dory_pair_real_v3`
 - `gap8_stdc_dory_pair_real_v3_int_parity`
+- `gap8_stdc_shared_dory_frozen_real_v1`
+- `gap8_stdc_shared_dory_frozen_real_v1_export`

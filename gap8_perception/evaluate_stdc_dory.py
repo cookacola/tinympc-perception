@@ -16,8 +16,9 @@ from gap8_perception.evaluate import binary_counts, local_centroid, safe_div
 from gap8_perception.model_stdc_dory import (
     Gap8STDCCornerDoryNet,
     Gap8STDCDangerDoryNet,
+    Gap8STDCSharedDoryNet,
 )
-from gap8_perception.profile_stdc_dory import combined_profile
+from gap8_perception.profile_stdc_dory import combined_profile, shared_profile
 from gap8_perception.train_stdc_dory_students import conservative_danger_target
 
 
@@ -44,10 +45,16 @@ def main():
     args = parser.parse_args()
     device = torch.device(args.device)
     state = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    corner, danger = Gap8STDCCornerDoryNet(), Gap8STDCDangerDoryNet()
-    corner.load_state_dict(state["corner_model"])
-    danger.load_state_dict(state["danger_model"])
-    corner, danger = corner.to(device).eval(), danger.to(device).eval()
+    shared = state.get("architecture") == "Gap8STDCSharedDoryNet"
+    if shared:
+        model = Gap8STDCSharedDoryNet()
+        model.load_state_dict(state["model"])
+        model = model.to(device).eval()
+    else:
+        corner, danger = Gap8STDCCornerDoryNet(), Gap8STDCDangerDoryNet()
+        corner.load_state_dict(state["corner_model"])
+        danger.load_state_dict(state["danger_model"])
+        corner, danger = corner.to(device).eval(), danger.to(device).eval()
     dataset = STDCMultiTaskDataset(
         args.dataset, args.targets, args.split_file, "test"
     )
@@ -60,8 +67,13 @@ def main():
     with torch.no_grad():
         for batch in loader:
             image = batch["image"].to(device)
-            corner_probability = corner(image).sigmoid()
-            danger_probability = danger(image).sigmoid().cpu().numpy()
+            if shared:
+                outputs = model(image)
+                corner_probability = outputs["corners"].sigmoid()
+                danger_probability = outputs["danger"].sigmoid().cpu().numpy()
+            else:
+                corner_probability = corner(image).sigmoid()
+                danger_probability = danger(image).sigmoid().cpu().numpy()
             confidence = corner_probability.flatten(2).amax(2).cpu().numpy()
             valid = batch["corner_valid"].numpy().astype(bool)
             update = binary_counts((confidence >= 0.25).all(axis=1), valid)
@@ -87,7 +99,7 @@ def main():
     report = {
         "checkpoint": str(args.checkpoint),
         "images": len(dataset),
-        "resource_profile": combined_profile(),
+        "resource_profile": shared_profile() if shared else combined_profile(),
         "corners": {
             "mean_error_image_px": float(errors.mean()),
             "pck_at_4px": float((errors <= 4.0).mean()),

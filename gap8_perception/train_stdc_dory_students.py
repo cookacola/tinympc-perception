@@ -141,6 +141,10 @@ def main():
     parser.add_argument("--real-train-flights", default="flight_06")
     parser.add_argument("--real-validation-flights", default="flight_07")
     parser.add_argument("--real-weight", type=float, default=2.0)
+    parser.add_argument("--real-augmentation-strength", type=float, default=0.35)
+    parser.add_argument(
+        "--real-augmentation-probability", type=float, default=0.0
+    )
     parser.add_argument(
         "--select-corner-last",
         action="store_true",
@@ -194,6 +198,9 @@ def main():
             tuple(
                 item for item in args.real_train_flights.split(",") if item
             ),
+            augment=args.real_augmentation_probability > 0.0,
+            augmentation_strength=args.real_augmentation_strength,
+            augmentation_probability=args.real_augmentation_probability,
         )
         real_loader = DataLoader(
             real_dataset,

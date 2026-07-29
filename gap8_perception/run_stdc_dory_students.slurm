@@ -32,4 +32,6 @@ PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
   --real-train-flights "${REAL_TRAIN_FLIGHTS:-flight_06}" \
   --real-validation-flights "${REAL_VALIDATION_FLIGHTS:-flight_07}" \
   --real-weight "${REAL_WEIGHT:-2.0}" \
+  --real-augmentation-strength "${REAL_AUGMENTATION_STRENGTH:-0.35}" \
+  --real-augmentation-probability "${REAL_AUGMENTATION_PROBABILITY:-0.0}" \
   "${SELECTION_ARGS[@]}"

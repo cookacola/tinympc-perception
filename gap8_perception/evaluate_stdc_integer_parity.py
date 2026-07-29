@@ -44,8 +44,20 @@ def main():
         args.dataset, args.targets, args.split_file, "test"
     )
     by_path = {str(record[3]): index for index, record in enumerate(dataset.records)}
-    corner = np.load(args.integer_dir / "corner/corner_parity_predictions.npz")
-    danger = np.load(args.integer_dir / "danger/danger_parity_predictions.npz")
+    corner_path = args.integer_dir / "corner/corner_parity_predictions.npz"
+    danger_path = args.integer_dir / "danger/danger_parity_predictions.npz"
+    if not corner_path.is_file():
+        corner_path = (
+            args.integer_dir
+            / "corner_head/corner_head_parity_predictions.npz"
+        )
+    if not danger_path.is_file():
+        danger_path = (
+            args.integer_dir
+            / "danger_head/danger_head_parity_predictions.npz"
+        )
+    corner = np.load(corner_path)
+    danger = np.load(danger_path)
     if not np.array_equal(corner["paths"], danger["paths"]):
         raise RuntimeError("corner and danger parity path sets differ")
 

@@ -16,6 +16,7 @@ from gap8_perception.evaluate import local_centroid
 from gap8_perception.evaluate_real_flights import summarize
 from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
 from gap8_perception.model_stdc_dory import Gap8STDCCornerDoryNet
+from gap8_perception.model_stdc_dory import Gap8STDCSharedDoryNet
 
 
 def main():
@@ -37,8 +38,13 @@ def main():
     device = torch.device(args.device)
     state = torch.load(args.checkpoint, map_location=device, weights_only=False)
     dory_pair = state.get("architecture") == "Gap8STDCDoryPair"
+    shared_dory = state.get("architecture") == "Gap8STDCSharedDoryNet"
     model = (
-        Gap8STDCCornerDoryNet() if dory_pair else Gap8STDCMultiHeadNet()
+        Gap8STDCCornerDoryNet()
+        if dory_pair
+        else Gap8STDCSharedDoryNet()
+        if shared_dory
+        else Gap8STDCMultiHeadNet()
     ).to(device)
     model.load_state_dict(
         state["corner_model"] if dory_pair else state["model"]
@@ -85,8 +91,11 @@ def main():
                     .to(device)
                     / 255.0
                 )
-                if dory_pair:
-                    corner_probability = model(tensor).sigmoid()
+                if dory_pair or shared_dory:
+                    logits = model(tensor)
+                    corner_probability = (
+                        logits if dory_pair else logits["corners"]
+                    ).sigmoid()
                     confidence = (
                         corner_probability.flatten(2).amax(2).cpu().numpy()
                     )

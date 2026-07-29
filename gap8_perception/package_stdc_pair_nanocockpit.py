@@ -38,6 +38,11 @@ def c_float(value):
     return "%.10gf" % float(value)
 
 
+def normalized_generated_text(text: str) -> str:
+    """Keep generated sources deterministic and acceptable to git diff --check."""
+    return "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+
+
 def namespace_text(text: str, graph: str) -> str:
     text = text.replace("gap8_", "stdc_%s_" % graph)
     text = text.replace("GAP8_", "STDC_%s_" % graph.upper())
@@ -47,7 +52,7 @@ def namespace_text(text: str, graph: str) -> str:
     text = re.sub(r"#define L3_WEIGHTS_SIZE \d+", "#define L3_WEIGHTS_SIZE 262144", text)
     text = re.sub(r"#define L3_INPUT_SIZE \d+", "#define L3_INPUT_SIZE 131072", text)
     text = re.sub(r"#define L3_OUTPUT_SIZE \d+", "#define L3_OUTPUT_SIZE 131072", text)
-    return text
+    return normalized_generated_text(text)
 
 
 def copy_namespaced_graph(source: Path, destination: Path, graph: str):
@@ -70,8 +75,11 @@ def copy_namespaced_graph(source: Path, destination: Path, graph: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--corner-app", type=Path, required=True)
-    parser.add_argument("--danger-app", type=Path, required=True)
+    parser.add_argument("--corner-app", type=Path)
+    parser.add_argument("--danger-app", type=Path)
+    parser.add_argument("--encoder-app", type=Path)
+    parser.add_argument("--corner-head-app", type=Path)
+    parser.add_argument("--danger-head-app", type=Path)
     parser.add_argument("--nemo-report", type=Path, required=True)
     parser.add_argument("--parity-report", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
@@ -82,8 +90,28 @@ def main():
     nemo = json.loads(args.nemo_report.read_text())
     parity = json.loads(args.parity_report.read_text())
     graphs = {item["graph"]: item for item in nemo["graphs"]}
-    if set(graphs) != {"corner", "danger"}:
-        raise RuntimeError("expected corner and danger NeMO reports")
+    shared = all(
+        (args.encoder_app, args.corner_head_app, args.danger_head_app)
+    )
+    if shared:
+        expected_graphs = {"encoder", "corner_head", "danger_head"}
+        graph_apps = {
+            "encoder": args.encoder_app,
+            "corner_head": args.corner_head_app,
+            "danger_head": args.danger_head_app,
+        }
+    else:
+        if not args.corner_app or not args.danger_app:
+            raise RuntimeError(
+                "provide either pair apps or all three shared apps"
+            )
+        expected_graphs = {"corner", "danger"}
+        graph_apps = {
+            "corner": args.corner_app,
+            "danger": args.danger_app,
+        }
+    if set(graphs) != expected_graphs:
+        raise RuntimeError("NeMO report graph set does not match package mode")
     if parity.get("held_out_split") != "test":
         raise RuntimeError("danger threshold must come from held-out test data")
     threshold = parity["recommended_integer_danger_threshold_for_recall_0.99"]
@@ -96,13 +124,19 @@ def main():
     for directory in ("src", "inc", "hex"):
         (destination / directory).mkdir(parents=True)
 
+    common_app = next(iter(graph_apps.values()))
     for filename in COMMON_SOURCES:
-        shutil.copy2(args.corner_app / "src" / filename, destination / "src" / filename)
-    for path in sorted((args.corner_app / "inc").glob("*.h")):
+        source = common_app / "src" / filename
+        (destination / "src" / filename).write_text(
+            normalized_generated_text(source.read_text())
+        )
+    for path in sorted((common_app / "inc").glob("*.h")):
         if not path.name.startswith("gap8_"):
-            shutil.copy2(path, destination / "inc" / path.name)
-    copy_namespaced_graph(args.corner_app, destination, "corner")
-    copy_namespaced_graph(args.danger_app, destination, "danger")
+            (destination / "inc" / path.name).write_text(
+                normalized_generated_text(path.read_text())
+            )
+    for graph, app in graph_apps.items():
+        copy_namespaced_graph(app, destination, graph)
 
     wrapper_header = """#ifndef STDC_PAIR_NETWORK_H
 #define STDC_PAIR_NETWORK_H
@@ -116,7 +150,84 @@ void network_run_async_cl(void *l2_buffer, size_t l2_buffer_size,
 #endif
 """
     (destination / "inc" / "network.h").write_text(wrapper_header)
-    wrapper_source = """#include "network.h"
+    if shared:
+        wrapper_source = """#include "network.h"
+#include "stdc_encoder_network.h"
+#include "stdc_corner_head_network.h"
+#include "stdc_danger_head_network.h"
+#include <string.h>
+
+#define STDC_SHARED_BYTES 38400
+#define STDC_CORNER_BYTES 4800
+#define STDC_DANGER_BYTES 80
+
+static PI_L2 uint8_t shared_output[STDC_SHARED_BYTES];
+static PI_L2 uint8_t corner_output[STDC_CORNER_BYTES];
+static PI_L2 uint8_t danger_output[STDC_DANGER_BYTES];
+static PI_FC_L1 pi_task_t encoder_done;
+static PI_FC_L1 pi_task_t corner_done;
+static PI_FC_L1 pi_task_t danger_done;
+static void *workspace;
+static size_t workspace_size;
+static void *combined_output;
+static int run_exec;
+static int run_initial_dir;
+static pi_device_t *run_cluster;
+static pi_task_t *user_done;
+
+static void danger_finished(void *arg) {
+  (void)arg;
+  memcpy(combined_output, corner_output, STDC_CORNER_BYTES);
+  memcpy((uint8_t *)combined_output + STDC_CORNER_BYTES,
+         danger_output, STDC_DANGER_BYTES);
+  pi_task_push(user_done);
+}
+
+static void corner_finished(void *arg) {
+  (void)arg;
+  memcpy(workspace, shared_output, STDC_SHARED_BYTES);
+  stdc_danger_head_network_run_async_cl(
+      workspace, workspace_size, danger_output, run_exec, run_initial_dir,
+      run_cluster, pi_task_callback(&danger_done, danger_finished, NULL));
+}
+
+static void encoder_finished(void *arg) {
+  (void)arg;
+  memcpy(workspace, shared_output, STDC_SHARED_BYTES);
+  stdc_corner_head_network_run_async_cl(
+      workspace, workspace_size, corner_output, run_exec, run_initial_dir,
+      run_cluster, pi_task_callback(&corner_done, corner_finished, NULL));
+}
+
+void network_initialize(void) {
+  stdc_encoder_network_initialize();
+  stdc_corner_head_network_initialize();
+  stdc_danger_head_network_initialize();
+}
+
+void network_terminate(void) {
+  stdc_encoder_network_terminate();
+  stdc_corner_head_network_terminate();
+  stdc_danger_head_network_terminate();
+}
+
+void network_run_async_cl(void *l2_buffer, size_t l2_buffer_size,
+                          void *l2_final_output, int exec, int initial_dir,
+                          pi_device_t *cluster, pi_task_t *network_done) {
+  workspace = l2_buffer;
+  workspace_size = l2_buffer_size;
+  combined_output = l2_final_output;
+  run_exec = exec;
+  run_initial_dir = initial_dir;
+  run_cluster = cluster;
+  user_done = network_done;
+  stdc_encoder_network_run_async_cl(
+      workspace, workspace_size, shared_output, exec, initial_dir, cluster,
+      pi_task_callback(&encoder_done, encoder_finished, NULL));
+}
+"""
+    else:
+        wrapper_source = """#include "network.h"
 #include "stdc_corner_network.h"
 #include "stdc_danger_network.h"
 #include <string.h>
@@ -182,8 +293,8 @@ void network_run_async_cl(void *l2_buffer, size_t l2_buffer_size,
 """
     (destination / "src" / "stdc_pair_network.c").write_text(wrapper_source)
 
-    corner_q = graphs["corner"]
-    danger_q = graphs["danger"]
+    corner_q = graphs["corner_head" if shared else "corner"]
+    danger_q = graphs["danger_head" if shared else "danger"]
     output_header = """#ifndef GAP8_PERCEPTION_OUTPUT_H
 #define GAP8_PERCEPTION_OUTPUT_H
 #include <stdint.h>
@@ -351,7 +462,7 @@ void gap8_pool_control_maps(const uint8_t *packed,
     (destination / "src" / "gap8_perception_output.c").write_text(output_source)
 
     weights = sorted(path.name for path in (destination / "hex").glob("*_weights.hex"))
-    network_mk = """# Generated dual STDC DORY package.
+    network_mk = """# Generated STDC DORY package.
 CORE ?= 7
 FLASH_TYPE ?= HYPERFLASH
 RAM_TYPE ?= HYPERRAM
@@ -359,19 +470,24 @@ APP_SRCS += $(wildcard $(NETWORK_DIR)/src/*.c)
 APP_CFLAGS += -I$(NETWORK_DIR)/inc
 APP_CFLAGS += -DNUM_CORES=$(CORE) -DGAP8_MULTITASK_NETWORK=1
 APP_CFLAGS += -DGAP8_STDC_PAIR_NETWORK=1
+%s
 APP_CFLAGS += -Wno-error -O2 -fno-indirect-inlining -flto
 APP_LDFLAGS += -lm -flto
 APP_CFLAGS += -DGAP_SDK=1 -DFLASH_TYPE=$(FLASH_TYPE)
 APP_CFLAGS += -DUSE_$(FLASH_TYPE) -DUSE_$(RAM_TYPE)
 APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
-"""
+""" % ("APP_CFLAGS += -DGAP8_STDC_SHARED_NETWORK=1" if shared else "")
     for filename in weights:
         network_mk += "FLASH_FILES += $(NETWORK_DIR)/hex/%s\n" % filename
     network_mk += "READFS_FILES += $(FLASH_FILES)\n"
     (destination / "network.mk").write_text(network_mk)
 
     manifest = {
-        "format": "nanocockpit-stdc-dory-pair-v1",
+        "format": (
+            "nanocockpit-stdc-shared-dory-v1"
+            if shared
+            else "nanocockpit-stdc-dory-pair-v1"
+        ),
         "name": args.name,
         "input": {"dtype": "uint8", "layout": "HWC", "shape": [120, 160, 1]},
         "outputs": {
@@ -380,18 +496,28 @@ APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
         },
         "integer_affine": {
             name: {
-                "epsilon": graphs[name]["output_epsilon"],
-                "offset": graphs[name]["output_offset"],
-                "learned_bias": graphs[name]["learned_bias"],
+                "epsilon": graphs[
+                    name + "_head" if shared else name
+                ]["output_epsilon"],
+                "offset": graphs[
+                    name + "_head" if shared else name
+                ]["output_offset"],
+                "learned_bias": graphs[
+                    name + "_head" if shared else name
+                ]["learned_bias"],
             }
             for name in ("corner", "danger")
         },
         "danger_probability_threshold": threshold["threshold"],
         "danger_threshold_metrics": threshold,
         "memory": {
-            "directional_l2_workspace_required_bytes": 154256,
-            "nanocockpit_workspace_configured_bytes": 160000,
-            "linked_static_l2_bytes": 207404,
+            "directional_l2_workspace_required_bytes": (
+                180000 if shared else 154256
+            ),
+            "nanocockpit_workspace_configured_bytes": (
+                180000 if shared else 160000
+            ),
+            "linked_static_l2_bytes": 225676 if shared else 207404,
             "dory_max_l1_tile_bytes": 36289,
         },
         "source_reports": {

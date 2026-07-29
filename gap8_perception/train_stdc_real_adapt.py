@@ -93,6 +93,10 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--real-weight", type=float, default=2.0)
+    parser.add_argument("--real-augmentation-strength", type=float, default=0.35)
+    parser.add_argument(
+        "--real-augmentation-probability", type=float, default=0.0
+    )
     parser.add_argument("--real-train-flights", default="flight_06")
     parser.add_argument("--real-validation-flights", default="flight_07")
     args = parser.parse_args()
@@ -115,7 +119,13 @@ def main():
     real_validation_flights = tuple(
         item for item in args.real_validation_flights.split(",") if item
     )
-    real = RealCornerDataset(args.real_root, real_train_flights)
+    real = RealCornerDataset(
+        args.real_root,
+        real_train_flights,
+        augment=args.real_augmentation_probability > 0.0,
+        augmentation_strength=args.real_augmentation_strength,
+        augmentation_probability=args.real_augmentation_probability,
+    )
     real_validation = RealCornerDataset(args.real_root, real_validation_flights)
     loaders = [
         DataLoader(
@@ -179,6 +189,10 @@ def main():
                 "held_out_real_flight": "flight_08",
                 "real_task": "corners_only",
                 "real_weight": args.real_weight,
+                "real_augmentation_strength": args.real_augmentation_strength,
+                "real_augmentation_probability": (
+                    args.real_augmentation_probability
+                ),
             },
             "selection_score": selection_score,
             "best_selection_score": min(best, selection_score),
