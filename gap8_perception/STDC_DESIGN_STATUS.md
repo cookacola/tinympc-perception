@@ -139,6 +139,18 @@ but disabled by default. The next data collection must diversify tracks,
 lighting, cameras, and obstacles; the gate-only real set cannot validate the
 danger head.
 
+The selected shared model's real-world classification overlays are under
+`workspace/gap8_stdc_shared_real_overlays_v1`: 824 per-frame overlays, a
+100-frame montage, all 12,630 predictions in CSV, and an in-crop bias report.
+On the untouched in-crop flight-08 frames the overlay audit reproduces the
+12.79 px mean and 6.26 px median error. Danger colors on these images are
+explicitly visualization-only because the flights have no obstacle labels.
+
+The mocap audit also shows that these captures do not establish the 2 m/s
+racing requirement. Per-flight p95 translational speeds are only
+0.220–0.252 m/s; isolated finite-difference samples above 2 m/s are not
+sustained closed-loop validation and may include mocap noise.
+
 ## Reproduction
 
 ```bash

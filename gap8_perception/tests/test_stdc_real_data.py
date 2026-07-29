@@ -1,6 +1,7 @@
 import numpy as np
+import pytest
 
-from gap8_perception.audit_real_flights import topology_valid
+from gap8_perception.audit_real_flights import mocap_speed_summary, topology_valid
 from gap8_perception.data_stdc_real import augment_real_gate_frame
 
 
@@ -37,3 +38,12 @@ def test_real_gate_augmentation_is_seed_reproducible():
     )
     np.testing.assert_array_equal(first[0], second[0])
     np.testing.assert_allclose(first[1], second[1])
+
+
+def test_mocap_speed_summary_divides_distance_by_time():
+    samples = np.asarray(
+        [[0.0, 0.0, 0.0, 0.0], [0.1, 0.2, 0.0, 0.0], [0.2, 0.4, 0.0, 0.0]]
+    )
+    summary = mocap_speed_summary(samples)
+    assert summary["median_m_per_s"] == pytest.approx(2.0)
+    assert summary["fraction_at_or_above_2_m_per_s"] == pytest.approx(1.0)
