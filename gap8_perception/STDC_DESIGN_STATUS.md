@@ -45,6 +45,16 @@ unique HM01B0 frames and exact rollout targets. It uses the supplied camera
 calibration and NewBeeDrone textures, but one fixed lab course rather than
 750,000 images across varying racetracks.
 
+`user_workflows/run_varied_course_dataset.slurm` now provides the missing
+varying-track generator path. Its deterministic per-shard layouts randomize
+gate position/height, obstacle count/geometry/location, lighting, and floor
+appearance while retaining aligned HM01B0 RGB, depth, and semantic outputs.
+Two GPU smoke shards passed alignment validation. The full 750,000-frame
+render has not been claimed: measured storage is about 70 KiB/frame, while
+the current workspace has only about 20 GiB free versus roughly 64 GiB
+required including a safety reserve. The launcher refuses to partially fill
+the filesystem and can be pointed at a larger `OUTPUT_ROOT`.
+
 The real-flight set has 12,630 labeled gate frames. It contains no obstacles,
 so it can evaluate corner domain transfer but cannot train or validate danger
 without inventing negative labels. Frames whose labeled gate leaves the
