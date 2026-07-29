@@ -104,10 +104,11 @@ gate-opening permission map after confidence and geometry acceptance.
 
 The TinyMPC receiver consumes the calibrated conservative danger mask directly
 and increases risk for speed and stale-frame reach. Its host equivalence suite
-passes 14/14 tests. Remaining mandatory gates are the exact GVSOC
-checksum/latency run (the current GVSOC jobs remain CPU-bound without a
-completed checksum), a full STM32 cross-build (the host currently lacks
-`arm-none-eabi-gcc`), and physical track validation.
+passes 14/14 tests. The repository's Bitcraze builder container also completes
+the full `cf21bl` STM32 cross-build with the shared-model threshold: flash
+353,492/1,032,192 bytes, RAM 116,212/131,072 bytes, and CCM
+62,248/65,536 bytes. Remaining mandatory gates are the exact GVSOC
+checksum/latency run and physical track validation.
 
 ## Measured model results
 

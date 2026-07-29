@@ -27,6 +27,11 @@ def main():
     parser.add_argument("--nanocockpit-package", type=Path, required=True)
     parser.add_argument("--shared", action="store_true")
     parser.add_argument("--bias-audit", type=Path)
+    parser.add_argument(
+        "--crazyflie-build",
+        type=Path,
+        help="Optional successful controller build directory containing cf21bl.bin/hex.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -71,6 +76,13 @@ def main():
         )
     if args.bias_audit:
         sources["metrics/real_flight_bias.json"] = args.bias_audit
+    if args.crazyflie_build:
+        sources.update(
+            {
+                "firmware/cf21bl.bin": args.crazyflie_build / "cf21bl.bin",
+                "firmware/cf21bl.hex": args.crazyflie_build / "cf21bl.hex",
+            }
+        )
     optional_sources = {
         "dory/corner_gvsoc_checksum.log": args.export
         / "corner_gvsoc_checksum.log",
