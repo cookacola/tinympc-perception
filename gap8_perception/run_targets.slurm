@@ -8,13 +8,15 @@
 #SBATCH --error=/home/cchen/isaacsim-workspace/workspace/logs/%x-%A_%a.err
 set -euo pipefail
 
-REPO=/home/cchen/isaacsim-workspace
-DATASET=${DATASET_ROOT:-$REPO/workspace/course_hm01b0_nbd_texture_50k}
-TARGETS=${TARGETS:-$REPO/workspace/gap8_rollout_targets_rendercal_v2}
+SOURCE_DIR=${SOURCE_DIR:-/home/cchen/gap8-drone-racing-perception}
+WORKSPACE=${WORKSPACE:-/home/cchen/isaacsim-workspace/workspace}
+DATASET=${DATASET_ROOT:-$WORKSPACE/course_hm01b0_nbd_texture_50k}
+TARGETS=${TARGETS:-$WORKSPACE/gap8_rollout_targets_rendercal_v2}
 CALIBRATION=${CALIBRATION:-gap8_perception/configs/hm01b0_calibration.json}
 SHARD=$(printf "shard_%09d" "$((SLURM_ARRAY_TASK_ID * 1000))")
-cd "$REPO"
-PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
+mkdir -p "$TARGETS"
+cd "$SOURCE_DIR"
+PYTHONPATH="$SOURCE_DIR" /home/cchen/isaacsim-env/bin/python \
   gap8_perception/generate_targets.py "$DATASET/$SHARD" \
   --output "$TARGETS/$SHARD.npz" \
   --calibration "$CALIBRATION"
