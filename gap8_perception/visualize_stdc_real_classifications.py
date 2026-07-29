@@ -15,6 +15,7 @@ import torch
 from gap8_perception.audit_real_flights import canonical_image_order
 from gap8_perception.evaluate import local_centroid
 from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
+from gap8_perception.model_stdc_dory import Gap8STDCSharedDoryNet
 from gap8_perception.postprocess_stdc import (
     GateDecision,
     gate_override_danger,
@@ -176,7 +177,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
     state = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    model = Gap8STDCMultiHeadNet().to(device)
+    shared_dory = state.get("architecture") == "Gap8STDCSharedDoryNet"
+    model = (
+        Gap8STDCSharedDoryNet() if shared_dory else Gap8STDCMultiHeadNet()
+    ).to(device)
     model.load_state_dict(state["model"])
     model.eval()
     records = []
@@ -208,12 +212,21 @@ def main():
                     .to(device)
                     / 255.0
                 )
-                outputs = model.predict(tensor)
-                prediction = local_centroid(outputs["corners"]).cpu().numpy()
+                if shared_dory:
+                    logits = model(tensor)
+                    corner_probability = logits["corners"].sigmoid()
+                    confidence = (
+                        corner_probability.flatten(2).amax(2).cpu().numpy()
+                    )
+                    danger = logits["danger"].sigmoid().cpu().numpy()[:, 0]
+                else:
+                    outputs = model.predict(tensor)
+                    corner_probability = outputs["corners"]
+                    confidence = outputs["corner_confidence"].cpu().numpy()
+                    danger = outputs["danger"].cpu().numpy()[:, 0]
+                prediction = local_centroid(corner_probability).cpu().numpy()
                 prediction[..., 0] *= 4.0
                 prediction[..., 1] = prediction[..., 1] * 4.0 + 20.0
-                confidence = outputs["corner_confidence"].cpu().numpy()
-                danger = outputs["danger"].cpu().numpy()[:, 0]
                 for local in range(len(chunk)):
                     decision = validate_gate_geometry(
                         prediction[local], confidence[local]
@@ -250,9 +263,29 @@ def main():
             "red": "mocap-projected/canonicalized label",
             "green": "model quadrilateral",
             "arrows": "label-to-model residual",
-            "right_panel": "raw danger probability (blue low, red high)",
+            "right_panel": (
+                "raw danger probability (blue low, red high); visualization "
+                "only because these real frames have no obstacle labels"
+            ),
         },
+        "dataset_scope": "gate-only; no real danger accuracy claim",
         "all": bias_summary(prediction, truth),
+        "in_crop": bias_summary(
+            np.asarray(
+                [
+                    record["prediction"]
+                    for record in records
+                    if not record["outside_crop"]
+                ]
+            ),
+            np.asarray(
+                [
+                    record["truth"]
+                    for record in records
+                    if not record["outside_crop"]
+                ]
+            ),
+        ),
         "by_flight": {},
         "geometry_acceptance_rate": float(
             np.mean([record["accepted"] for record in records])
@@ -264,6 +297,13 @@ def main():
         report["by_flight"][flight] = bias_summary(
             np.asarray([record["prediction"] for record in selected]),
             np.asarray([record["truth"] for record in selected]),
+        )
+        selected_in_crop = [
+            record for record in selected if not record["outside_crop"]
+        ]
+        report["by_flight"][flight]["in_crop"] = bias_summary(
+            np.asarray([record["prediction"] for record in selected_in_crop]),
+            np.asarray([record["truth"] for record in selected_in_crop]),
         )
     (args.output / "bias_report.json").write_text(
         json.dumps(report, indent=2) + "\n"
