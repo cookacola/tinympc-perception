@@ -14,7 +14,7 @@ import torch
 from gap8_perception.audit_real_flights import canonical_image_order
 from gap8_perception.evaluate import local_centroid
 from gap8_perception.evaluate_real_flights import summarize
-from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
+from gap8_perception.model_stdc import Gap8STDCMultiHeadNet, ProposedSTDCFPNNet
 from gap8_perception.model_stdc_dory import Gap8STDCCornerDoryNet
 from gap8_perception.model_stdc_dory import Gap8STDCSharedDoryNet
 
@@ -44,6 +44,8 @@ def main():
         if dory_pair
         else Gap8STDCSharedDoryNet()
         if shared_dory
+        else ProposedSTDCFPNNet()
+        if state.get("architecture") == "ProposedSTDCFPNNet"
         else Gap8STDCMultiHeadNet()
     ).to(device)
     model.load_state_dict(

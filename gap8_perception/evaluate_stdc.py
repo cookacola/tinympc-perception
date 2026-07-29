@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from gap8_perception.data_stdc import STDCMultiTaskDataset
 from gap8_perception.evaluate import binary_counts, local_centroid, safe_div
-from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
+from gap8_perception.model_stdc import Gap8STDCMultiHeadNet, ProposedSTDCFPNNet
 from gap8_perception.profile_stdc import profile
 from gap8_perception.quantization import prepare_int8_qat
 
@@ -29,11 +29,16 @@ def main():
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--baseline-report", type=Path)
     args = parser.parse_args()
 
     device = torch.device(args.device)
     state = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    model = Gap8STDCMultiHeadNet()
+    model = (
+        ProposedSTDCFPNNet()
+        if state.get("architecture") == "ProposedSTDCFPNNet"
+        else Gap8STDCMultiHeadNet()
+    )
     if state.get("quantization_aware"):
         model = prepare_int8_qat(model)
     model = model.to(device)
@@ -55,6 +60,7 @@ def main():
         threshold: {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
         for threshold in danger_thresholds
     }
+    dory_danger_counts = {key: 0 for key in ("tp", "fp", "fn", "tn")}
     corner_errors = []
     danger_mae_sum = 0.0
     danger_items = 0
@@ -78,7 +84,9 @@ def main():
                 corner_errors.extend(errors.ravel().tolist())
 
             danger_probability = outputs["danger"].cpu().numpy()
-            danger_truth_float = batch["danger"].numpy()
+            danger_truth_float = batch[
+                "danger_dense" if danger_probability.shape[-2:] == (30, 40) else "danger"
+            ].numpy()
             danger_truth = danger_truth_float >= 0.5
             danger_mae_sum += float(
                 np.abs(danger_probability - danger_truth_float).sum()
@@ -88,6 +96,19 @@ def main():
                 update = binary_counts(danger_probability >= threshold, danger_truth)
                 for key in counts:
                     counts[key] += update[key]
+            # The current release's DORY danger graph is 8x10 and uses an
+            # adaptive max-pooled safety target.  Report this projection too,
+            # so the proposed dense danger head is compared at exactly the
+            # same operating resolution and conservative target definition.
+            dory_probability = torch.nn.functional.adaptive_max_pool2d(
+                torch.from_numpy(danger_probability), (8, 10)
+            ).numpy()
+            dory_truth = torch.nn.functional.adaptive_max_pool2d(
+                batch["danger"], (8, 10)
+            ).numpy() >= 0.5
+            update = binary_counts(dory_probability >= 0.5, dory_truth)
+            for key in dory_danger_counts:
+                dory_danger_counts[key] += update[key]
 
     def classification(counts):
         tp, fp, fn = counts["tp"], counts["fp"], counts["fn"]
@@ -119,7 +140,40 @@ def main():
                 for key, value in danger_counts.items()
             },
         },
+        "danger_dory_compatible_at_0.5": classification(dory_danger_counts),
     }
+    if args.baseline_report:
+        baseline = json.loads(args.baseline_report.read_text())
+        baseline_corner = baseline["corners"]
+        baseline_danger = baseline.get("danger_at_0.5")
+        if baseline_danger is None:
+            baseline_danger = baseline["danger"]["threshold_sweep"]["0.5"]
+        candidate_gate = report["corners"]["confidence_sweep"]["0.25"]
+        candidate_danger = report["danger_dory_compatible_at_0.5"]
+        report["comparison"] = {
+            "baseline_report": str(args.baseline_report),
+            "baseline_checkpoint": baseline.get("checkpoint"),
+            "delta_candidate_minus_baseline": {
+                "corner_mean_error_image_px": (
+                    report["corners"]["mean_error_image_px"]
+                    - baseline_corner["mean_error_image_px"]
+                ),
+                "corner_pck_at_4px": (
+                    report["corners"]["pck_at_4px"]
+                    - baseline_corner["pck_at_4px"]
+                ),
+                "gate_recall_at_0.25": (
+                    candidate_gate["recall"]
+                    - baseline_corner["gate_detection_at_0.25"]["recall"]
+                ),
+                "danger_recall_at_0.5": (
+                    candidate_danger["recall"] - baseline_danger["recall"]
+                ),
+                "danger_iou_at_0.5": (
+                    candidate_danger["iou"] - baseline_danger["iou"]
+                ),
+            },
+        }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

@@ -61,6 +61,20 @@ class STDCMultiTaskDataset(MultiTaskDataset):
         batch["danger"] = torch.from_numpy(
             self._crop_dense(batch["danger"][0].numpy(), 20, 15)
         ).unsqueeze(0)
+        batch["danger_dense"] = torch.from_numpy(
+            self._crop_dense(batch["danger"][0].numpy(), 40, 30)
+        ).unsqueeze(0)
+        gate = self._crop_dense(batch["gate"][0].numpy(), 40, 30)
+        boundary = cv2.morphologyEx(
+            np.uint8(gate >= 0.5),
+            cv2.MORPH_GRADIENT,
+            np.ones((3, 3), np.uint8),
+        ).astype(np.float32)
+        batch["boundary"] = torch.from_numpy(boundary).unsqueeze(0)
+        coordinates = batch["corner_xy"].clone()
+        coordinates[:, 1] -= self.crop_top
+        coordinates /= torch.tensor([160.0, 120.0])
+        batch["global_coordinates"] = coordinates.flatten().clamp(0.0, 1.0)
         return batch
 
 

@@ -1,7 +1,7 @@
 import torch
 
 from gap8_perception.losses_stdc import design_multitask_loss
-from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
+from gap8_perception.model_stdc import Gap8STDCMultiHeadNet, ProposedSTDCFPNNet
 from gap8_perception.profile_stdc import profile
 
 
@@ -42,3 +42,13 @@ def test_only_expected_learned_spatial_operators():
     model = Gap8STDCMultiHeadNet()
     forbidden = (torch.nn.ConvTranspose2d,)
     assert not any(isinstance(module, forbidden) for module in model.modules())
+def test_proposed_fpn_shapes_and_training_only_heads():
+    model = ProposedSTDCFPNNet()
+    model.train()
+    output = model(torch.zeros(2, 1, 120, 160))
+    assert output["corners"].shape == (2, 4, 30, 40)
+    assert output["danger"].shape == (2, 1, 30, 40)
+    assert output["boundary"].shape == (2, 1, 30, 40)
+    assert output["global_coordinates"].shape == (2, 8)
+    model.eval()
+    assert set(model(torch.zeros(1, 1, 120, 160))) == {"corners", "danger"}

@@ -43,7 +43,9 @@ def design_multitask_loss(
     corner = focal_heatmap_mse(
         outputs["corners"], batch["corners"], batch["corner_valid"]
     )
-    danger_target = batch["danger"].clamp(0.0, 1.0)
+    danger_target = batch[
+        "danger_dense" if outputs["danger"].shape[-2:] == (30, 40) else "danger"
+    ].clamp(0.0, 1.0)
     danger_binary = (danger_target >= 0.5).to(danger_target.dtype)
     danger_bce = F.binary_cross_entropy_with_logits(
         outputs["danger"],
@@ -55,10 +57,29 @@ def design_multitask_loss(
         outputs["danger"].sigmoid(), danger_target
     )
     danger = danger_bce + 0.5 * danger_dice + 0.1 * danger_regression
+    boundary = outputs["danger"].sum() * 0.0
+    if "boundary" in outputs:
+        boundary = F.binary_cross_entropy_with_logits(
+            outputs["boundary"], batch["boundary"]
+        ) + soft_dice_loss(outputs["boundary"], batch["boundary"])
+    coordinates = outputs["danger"].sum() * 0.0
+    if "global_coordinates" in outputs and batch["corner_valid"].any():
+        valid = batch["corner_valid"]
+        coordinates = F.smooth_l1_loss(
+            outputs["global_coordinates"][valid].sigmoid(),
+            batch["global_coordinates"][valid],
+        )
     return {
-        "total": corner_weight * corner + danger_weight * danger,
+        "total": (
+            corner_weight * corner
+            + danger_weight * danger
+            + 0.2 * boundary
+            + 0.1 * coordinates
+        ),
         "corner": corner,
         "danger": danger,
         "danger_bce": danger_bce,
         "danger_dice": danger_dice,
+        "boundary": boundary,
+        "coordinates": coordinates,
     }

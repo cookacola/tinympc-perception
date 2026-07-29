@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from gap8_perception.data_stdc import STDCMultiTaskDataset
 from gap8_perception.data_stdc_real import RealCornerDataset
 from gap8_perception.losses_stdc import design_multitask_loss, focal_heatmap_mse
-from gap8_perception.model_stdc import Gap8STDCMultiHeadNet
+from gap8_perception.model_stdc import Gap8STDCMultiHeadNet, ProposedSTDCFPNNet
 from gap8_perception.train_stdc import move, run_epoch
 
 
@@ -103,7 +103,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     state = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    model = Gap8STDCMultiHeadNet()
+    model = (
+        ProposedSTDCFPNNet()
+        if state.get("architecture") == "ProposedSTDCFPNNet"
+        else Gap8STDCMultiHeadNet()
+    )
     model.load_state_dict(state["model"])
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
@@ -182,7 +186,7 @@ def main():
             "epoch": epoch,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
-            "architecture": "Gap8STDCMultiHeadNet",
+            "architecture": type(model).__name__,
             "adaptation": {
                 "real_train_flights": list(real_train_flights),
                 "real_validation_flights": list(real_validation_flights),

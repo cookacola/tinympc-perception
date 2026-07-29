@@ -16,7 +16,11 @@ from torch.utils.data import DataLoader
 
 from gap8_perception.data_stdc import STDCMultiTaskDataset, STDCPrivilegedDataset
 from gap8_perception.losses_stdc import design_multitask_loss
-from gap8_perception.model_stdc import Gap8STDCMultiHeadNet, Gap8STDCPrivilegedTeacher
+from gap8_perception.model_stdc import (
+    Gap8STDCMultiHeadNet,
+    Gap8STDCPrivilegedTeacher,
+    ProposedSTDCFPNNet,
+)
 
 
 def move(batch, device):
@@ -65,6 +69,9 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
+        "--architecture", choices=("existing", "proposed-fpn"), default="existing"
+    )
+    parser.add_argument(
         "--privileged-teacher",
         action="store_true",
         help="Train a two-channel monochrome+inverse-depth teacher.",
@@ -99,9 +106,13 @@ def main():
         )
         for dataset, shuffle in ((train, True), (validation, False))
     ]
+    if args.privileged_teacher and args.architecture != "existing":
+        parser.error("--privileged-teacher only supports --architecture existing")
     model = (
         Gap8STDCPrivilegedTeacher()
         if args.privileged_teacher
+        else ProposedSTDCFPNNet()
+        if args.architecture == "proposed-fpn"
         else Gap8STDCMultiHeadNet()
     ).to(device)
     optimizer = torch.optim.AdamW(
@@ -153,11 +164,11 @@ def main():
             "architecture": (
                 "Gap8STDCPrivilegedTeacher"
                 if args.privileged_teacher
-                else "Gap8STDCMultiHeadNet"
+                else type(model).__name__
             ),
             "input": [2 if args.privileged_teacher else 1, 120, 160],
             "corner_output": [4, 30, 40],
-            "danger_output": [1, 15, 20],
+            "danger_output": list(model.danger_shape),
             "crop": {"top": 20, "bottom": 140},
         }
         torch.save(state, args.output / "last.pt")
