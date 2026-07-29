@@ -521,6 +521,7 @@ APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
                 180000 if shared else 160000
             ),
             "linked_static_l2_bytes": 225676 if shared else 207404,
+            "linked_static_l2_includes_workspace": True,
             "dory_max_l1_tile_bytes": 36289,
         },
         "source_reports": {

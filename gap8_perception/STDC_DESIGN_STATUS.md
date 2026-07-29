@@ -107,8 +107,10 @@ Integer gate precision is 0.9818 at its confidence threshold.
 
 DORY generated all three shared graphs successfully. DORY's maximum estimated live L1 tile
 is 36,289 bytes. The namespaced NanoCockpit pair builds into one GAP8 firmware
-image, uses 225,676 bytes of 512 kB static L2 plus a bounded 180,000-byte
-directional workspace, center-crops the camera to 160x120, runs the encoder
+image and uses 225,676 bytes of 512 kB static L2, including its bounded
+180,000-byte directional workspace. A generated-allocation audit proves a
+153,984-byte peak (153,985 bytes required by DORY's strict allocator), leaving
+26,015 bytes of workspace margin. It center-crops the camera to 160x120, runs the encoder
 once, rejects phantom gate geometry, and only emits an inset
 gate-opening permission map after confidence and geometry acceptance.
 
