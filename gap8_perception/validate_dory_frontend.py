@@ -161,6 +161,15 @@ def main():
             "pi_l2_free(l2_buffer, 417000);\n  pmsis_exit(0);",
         )
         main_text = main_text.replace(
+            "int main () {\n#ifndef TARGET_CHIP_FAMILY_GAP9",
+            "int main () {\n#ifndef DORY_CHECKSUM_HARNESS\n"
+            "#ifndef TARGET_CHIP_FAMILY_GAP9",
+        )
+        main_text = main_text.replace(
+            "\n\n  pmsis_kickoff((void*)application);",
+            "\n#endif\n\n  pmsis_kickoff((void*)application);",
+        )
+        main_text = main_text.replace(
             "  pi_time_wait_us(10000);",
             "#ifndef DORY_CHECKSUM_HARNESS\n"
             "  pi_time_wait_us(10000);\n"
