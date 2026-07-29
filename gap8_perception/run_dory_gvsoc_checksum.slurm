@@ -8,11 +8,14 @@
 set -euo pipefail
 
 : "${EXPORT:?set EXPORT to the completed STDC DORY export directory}"
-: "${GRAPH:?set GRAPH to corner or danger}"
-if [[ "$GRAPH" != corner && "$GRAPH" != danger ]]; then
-  echo "GRAPH must be corner or danger" >&2
+: "${GRAPH:?set GRAPH to corner, danger, encoder, corner_head, or danger_head}"
+case "$GRAPH" in
+  corner|danger|encoder|corner_head|danger_head) ;;
+  *)
+  echo "unsupported GRAPH: $GRAPH" >&2
   exit 2
-fi
+  ;;
+esac
 
 GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
