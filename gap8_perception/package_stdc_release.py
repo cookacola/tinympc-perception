@@ -32,6 +32,7 @@ def main():
         type=Path,
         help="Optional successful controller build directory containing cf21bl.bin/hex.",
     )
+    parser.add_argument("--l2-audit", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -83,6 +84,8 @@ def main():
                 "firmware/cf21bl.hex": args.crazyflie_build / "cf21bl.hex",
             }
         )
+    if args.l2_audit:
+        sources["dory/l2_workspace_audit.json"] = args.l2_audit
     optional_graphs = (
         ("encoder", "corner_head", "danger_head")
         if args.shared

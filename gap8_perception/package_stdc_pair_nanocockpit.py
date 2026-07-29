@@ -511,8 +511,11 @@ APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
         "danger_probability_threshold": threshold["threshold"],
         "danger_threshold_metrics": threshold,
         "memory": {
-            "directional_l2_workspace_required_bytes": (
-                180000 if shared else 154256
+            "proven_peak_directional_allocator_bytes": (
+                153984 if shared else 154256
+            ),
+            "strict_allocator_required_bytes": (
+                153985 if shared else 154257
             ),
             "nanocockpit_workspace_configured_bytes": (
                 180000 if shared else 160000
