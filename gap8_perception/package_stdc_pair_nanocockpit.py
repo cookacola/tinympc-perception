@@ -82,6 +82,10 @@ def main():
     parser.add_argument("--danger-head-app", type=Path)
     parser.add_argument("--nemo-report", type=Path, required=True)
     parser.add_argument("--parity-report", type=Path, required=True)
+    parser.add_argument(
+        "--canonical-gate-dir", type=Path,
+        help="directory containing <graph>_canonical_dory_gate.json release gates",
+    )
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--name", default="gap8-stdc-real-dory-pair")
     parser.add_argument("--controller-qparams-header", type=Path)
@@ -112,6 +116,24 @@ def main():
         }
     if set(graphs) != expected_graphs:
         raise RuntimeError("NeMO report graph set does not match package mode")
+    if shared:
+        if args.canonical_gate_dir is None:
+            raise RuntimeError(
+                "shared-DORY packaging requires --canonical-gate-dir"
+            )
+        canonical_gates = {}
+        for graph in sorted(expected_graphs):
+            gate_path = args.canonical_gate_dir / (
+                "%s_canonical_dory_gate.json" % graph
+            )
+            if not gate_path.is_file():
+                raise RuntimeError("missing canonical DORY gate: %s" % gate_path)
+            gate = json.loads(gate_path.read_text())
+            if not gate.get("passed"):
+                raise RuntimeError("canonical DORY gate failed: %s" % gate_path)
+            canonical_gates[graph] = str(gate_path.resolve())
+    else:
+        canonical_gates = {}
     if parity.get("held_out_split") != "test":
         raise RuntimeError("danger threshold must come from held-out test data")
     threshold = parity["recommended_integer_danger_threshold_for_recall_0.99"]
@@ -587,6 +609,7 @@ APP_CFLAGS += -DALWAYS_BLOCK_DMA_TRANSFERS -DFS_READ_FS
         "source_reports": {
             "nemo": str(args.nemo_report.resolve()),
             "parity": str(args.parity_report.resolve()),
+            "canonical_dory_gates": canonical_gates,
         },
     }
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
