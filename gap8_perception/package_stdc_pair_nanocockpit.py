@@ -509,7 +509,7 @@ void gap8_pool_control_maps(const uint8_t *packed,
 
     weights = sorted(path.name for path in (destination / "hex").glob("*_weights.hex"))
     network_mk = """# Generated STDC DORY package.
-CORE ?= 7
+CORE ?= 8
 FLASH_TYPE ?= HYPERFLASH
 RAM_TYPE ?= HYPERRAM
 APP_SRCS += $(wildcard $(NETWORK_DIR)/src/*.c)

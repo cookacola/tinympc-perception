@@ -14,6 +14,7 @@ import numpy as np
 import onnx
 import torch
 import torch.nn as nn
+from onnx import numpy_helper
 
 from gap8_perception.nemo_stdc_dory_export import (
     ConvBNReLU,
@@ -124,6 +125,67 @@ def activation_epsilon(model):
     return values[-1]
 
 
+def bound_int8_convolution_weights(model):
+    """Make the NeMO/DORY signed-weight ABI explicit and lossless.
+
+    NeMO keeps integer-valued convolution weights in float tensors.  The ONNX
+    exporter therefore used to retain values outside signed int8 while DORY
+    serialized each value as one byte, silently wrapping it.  Round and clamp
+    once, before both the golden fixtures and ONNX are generated.
+    """
+    report = []
+    with torch.no_grad():
+        for name, module in model.named_modules():
+            if not isinstance(module, nn.Conv2d):
+                continue
+            original = module.weight.detach().clone()
+            integer = torch.round(original)
+            clipped = integer.clamp(-128, 127)
+            overflow = int(((integer < -128) | (integer > 127)).sum())
+            rounded = int((integer != original).sum())
+            module.weight.copy_(clipped)
+            report.append(
+                {
+                    "name": name,
+                    "minimum_before": float(original.min()),
+                    "maximum_before": float(original.max()),
+                    "overflow_values_clamped": overflow,
+                    "noninteger_values_rounded": rounded,
+                    "minimum_after": int(clipped.min()),
+                    "maximum_after": int(clipped.max()),
+                }
+            )
+    return report
+
+
+def verify_onnx_int8_convolution_weights(path):
+    """Reject an ONNX graph that DORY would have to truncate to one byte."""
+    graph = onnx.load(str(path))
+    initializers = {item.name: numpy_helper.to_array(item) for item in graph.graph.initializer}
+    report = []
+    for node in graph.graph.node:
+        if node.op_type != "Conv":
+            continue
+        if len(node.input) < 2 or node.input[1] not in initializers:
+            raise RuntimeError("missing convolution weight initializer for %s" % node.name)
+        weight = initializers[node.input[1]]
+        if not np.array_equal(weight, np.rint(weight)):
+            raise RuntimeError("noninteger convolution weights in %s" % node.input[1])
+        minimum, maximum = int(weight.min()), int(weight.max())
+        if minimum < -128 or maximum > 127:
+            raise RuntimeError(
+                "signed-int8 convolution weight overflow in %s: [%d, %d]"
+                % (node.input[1], minimum, maximum)
+            )
+        report.append(
+            {"name": node.input[1], "minimum": minimum, "maximum": maximum,
+             "values": int(weight.size)}
+        )
+    if not report:
+        raise RuntimeError("ONNX graph has no convolution weights")
+    return report
+
+
 def save_integer_fixture(model, integer_input, output, input_hwc):
     golden = []
     hooks = []
@@ -176,6 +238,7 @@ def quantize_encoder(model, calibration_paths, parity_paths, output):
     model.reset_alpha_act()
     model.qd_stage(eps_in=1.0 / 255.0)
     model.id_stage()
+    weight_report = bound_int8_convolution_weights(model)
     first_image = cv2.imread(
         str(calibration_paths[0]), cv2.IMREAD_GRAYSCALE
     )[20:140]
@@ -213,6 +276,10 @@ def quantize_encoder(model, calibration_paths, parity_paths, output):
         "integer_nonzero": int((integer_output != 0).sum()),
         "integer_layers": layers,
         "parity_images": len(parity_paths),
+        "weight_quantization": weight_report,
+        "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
+            onnx_path
+        ),
     }
 
 
@@ -263,6 +330,7 @@ def quantize_head(
     model.reset_alpha_act()
     model.qd_stage(eps_in=encoder_epsilon)
     model.id_stage()
+    weight_report = bound_int8_convolution_weights(model)
     first_image = cv2.imread(
         str(calibration_paths[0]), cv2.IMREAD_GRAYSCALE
     )[20:140]
@@ -345,6 +413,10 @@ def quantize_head(
         "integer_nonzero": int((integer_output != 0).sum()),
         "integer_layers": layers,
         "parity_images": len(parity_paths),
+        "weight_quantization": weight_report,
+        "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
+            onnx_path
+        ),
     }
 
 

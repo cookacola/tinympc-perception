@@ -21,6 +21,7 @@ GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
 APP="$EXPORT/${GRAPH}_gap8_application"
 LOG="$EXPORT/${GRAPH}_gvsoc_checksum_release.log"
+CORE=${CORE:-8}
 
 source /home/cchen/miniconda3/etc/profile.d/conda.sh
 conda activate frontnet
@@ -35,7 +36,7 @@ set -u
 
 cd "$APP"
 make clean
-make all image flash run.prepare platform=gvsoc CORE=7 DORY_CHECKSUM_HARNESS=1
+make all image flash run.prepare platform=gvsoc CORE="$CORE" DORY_CHECKSUM_HARNESS=1
 cd BUILD/GAP8_V2/GCC_RISCV
 gvsoc_launcher --config=gvsoc_config.json 2>&1 | tee "$LOG"
 grep -q "Checking final layer: Checksum OK" "$LOG"
