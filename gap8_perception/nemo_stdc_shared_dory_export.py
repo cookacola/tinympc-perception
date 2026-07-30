@@ -221,7 +221,38 @@ def save_integer_fixture(model, integer_input, output, input_hwc):
     return integer_output, len(golden)
 
 
-def quantize_encoder(model, calibration_paths, parity_paths, output):
+def configure_residual_requantization(model, factor):
+    """Use the smallest exact NeMO residual-add intermediate scale.
+
+    Frontnet-compatible deployment must not depend on an extra post-add
+    multiplier in the generated PULP-NN layer.  A factor of one asks NeMO to
+    choose the smallest power-of-two D that represents the input scale ratio.
+    """
+    configured = 0
+    for module in model.modules():
+        if hasattr(module, "requantization_factor"):
+            module.requantization_factor = factor
+            configured += 1
+    return configured
+
+
+def load_qat_checkpoint(model, checkpoint_path, graph_name):
+    if checkpoint_path is None:
+        return False
+    checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
+    if checkpoint.get("graph") != graph_name:
+        raise RuntimeError(
+            "QAT checkpoint graph mismatch: %r != %r"
+            % (checkpoint.get("graph"), graph_name)
+        )
+    if checkpoint.get("precision_bits") != 8:
+        raise RuntimeError("QAT checkpoint is not int8")
+    model.load_state_dict(checkpoint["model"])
+    return True
+
+
+def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
+                     qat_checkpoint=None):
     output.mkdir(parents=True, exist_ok=True)
     model.eval()
     model_float = copy.deepcopy(model).eval()
@@ -236,6 +267,8 @@ def quantize_encoder(model, calibration_paths, parity_paths, output):
             model(image_tensor(calibration_paths[start : start + 32]))
     model.unset_statistics_act()
     model.reset_alpha_act()
+    qat_loaded = load_qat_checkpoint(model, qat_checkpoint, "encoder")
+    residual_adds = configure_residual_requantization(model, add_factor)
     model.qd_stage(eps_in=1.0 / 255.0)
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
@@ -275,6 +308,9 @@ def quantize_encoder(model, calibration_paths, parity_paths, output):
         "integer_output_shape": list(integer_output.shape),
         "integer_nonzero": int((integer_output != 0).sum()),
         "integer_layers": layers,
+        "residual_adds_configured": residual_adds,
+        "residual_requantization_factor": add_factor,
+        "qat_checkpoint": str(qat_checkpoint) if qat_loaded else None,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,
         "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
@@ -292,6 +328,8 @@ def quantize_head(
     calibration_paths,
     parity_paths,
     output,
+    add_factor,
+    qat_checkpoint=None,
 ):
     output.mkdir(parents=True, exist_ok=True)
     model.eval()
@@ -328,6 +366,8 @@ def quantize_head(
             model(shared)
     model.unset_statistics_act()
     model.reset_alpha_act()
+    qat_loaded = load_qat_checkpoint(model, qat_checkpoint, name)
+    residual_adds = configure_residual_requantization(model, add_factor)
     model.qd_stage(eps_in=encoder_epsilon)
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
@@ -412,6 +452,9 @@ def quantize_head(
         "integer_output_shape": list(integer_output.shape),
         "integer_nonzero": int((integer_output != 0).sum()),
         "integer_layers": layers,
+        "residual_adds_configured": residual_adds,
+        "residual_requantization_factor": add_factor,
+        "qat_checkpoint": str(qat_checkpoint) if qat_loaded else None,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,
         "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
@@ -428,6 +471,13 @@ def main():
     parser.add_argument("--calibration-images", type=int, default=256)
     parser.add_argument("--split-file", type=Path, required=True)
     parser.add_argument("--parity-images", type=int, default=512)
+    parser.add_argument(
+        "--residual-requantization-factor", type=int, default=1,
+        help="NeMO PACT_IntegerAdd minimum requantization factor; canonical releases use 1.",
+    )
+    parser.add_argument("--encoder-qat-checkpoint", type=Path)
+    parser.add_argument("--corner-head-qat-checkpoint", type=Path)
+    parser.add_argument("--danger-head-qat-checkpoint", type=Path)
     args = parser.parse_args()
     paths = sorted(args.dataset.glob("shard_*/hm01b0_mono_*.png"))
     indices = np.linspace(
@@ -451,6 +501,8 @@ def main():
         calibration_paths,
         parity_paths,
         args.output / "encoder",
+        args.residual_requantization_factor,
+        args.encoder_qat_checkpoint,
     )
     reports = [encoder_report]
     for name, model in (
@@ -468,6 +520,9 @@ def main():
                 calibration_paths,
                 parity_paths,
                 args.output / name,
+                args.residual_requantization_factor,
+                (args.corner_head_qat_checkpoint if name == "corner_head"
+                 else args.danger_head_qat_checkpoint),
             )
         )
     report = {
