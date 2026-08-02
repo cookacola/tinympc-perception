@@ -1,0 +1,10 @@
+{
+  "tensor": "perception_scores_12x15x20",
+  "shape": [1, 12, 15, 20],
+  "signed": false,
+  "bits": 8,
+  "scale": 0.11307859420776367,
+  "zero_point": 0,
+  "logical_score_offset": 6.0,
+  "interpretation": "logical_score = uint8 * output_epsilon - 6.0"
+}

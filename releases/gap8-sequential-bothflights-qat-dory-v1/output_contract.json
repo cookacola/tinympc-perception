@@ -1,0 +1,12 @@
+{
+  "input": {"dtype": "uint8", "layout": "NCHW", "shape": [1, 1, 120, 160]},
+  "sensor_frame": {"shape": [160, 160], "crop_rows": [20, 140]},
+  "output": {"dtype": "uint8", "layout": "NCHW", "shape": [1, 12, 15, 20]},
+  "channels": {
+    "0-3": ["top_left_heatmap", "top_right_heatmap", "bottom_right_heatmap", "bottom_left_heatmap"],
+    "4-7": "fixed-normal clearance scores",
+    "8-11": "fixed-normal confidence scores"
+  },
+  "normal_angles_deg": [-40.0, -13.333333, 13.333333, 40.0],
+  "gate_validation": {"peak_min": 0.0, "ambiguity_margin_min": 0.5, "minimum_area_px2": 100.0, "maximum_side_ratio": 6.0}
+}
