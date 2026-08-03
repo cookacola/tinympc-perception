@@ -1,4 +1,7 @@
-# 160x120 STDC multi-head network
+# Historical 160x120 STDC/FPN experiment (non-canonical)
+
+The canonical replacement is the sequential 12-channel model in the completed
+CNN design document. This file is retained as rejected-experiment evidence.
 
 This is the new network implementation corresponding to the supplied
 Multi-Headed CNN Design Document. It is independent of the earlier

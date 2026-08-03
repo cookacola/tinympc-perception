@@ -30,10 +30,25 @@ def main():
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--app-dir", type=Path)
-    parser.add_argument("--expected-output-bytes", type=int, default=12800)
+    parser.add_argument(
+        "--bnrelu-bits", type=int, choices=(32, 64), default=64,
+        help=(
+            "width of fused BN/ReLU k and lambda constants; 64 is the "
+            "safe GAP8 setting for this model"
+        ),
+    )
+    # The deployed student emits uint8 [12, 15, 20] scores: 3,600 bytes.
+    # Keep this default tied to the design contract instead of the legacy
+    # 40x40 auxiliary-head tensor used by older graphs.
+    parser.add_argument("--expected-output-bytes", type=int, default=12 * 15 * 20)
     args = parser.parse_args()
+    # The 32-bit GAP8 kernel evaluates (k * convolution_sum) + lambda in
+    # signed int32_t. The sequential student has a validated layer-12
+    # fixture outside that range, even though its final uint8 output is
+    # representable. The installed DORY 64-bit backend keeps this affine
+    # intermediate wide without changing the learned graph.
     config = {
-        "BNRelu_bits": 32,
+        "BNRelu_bits": args.bnrelu_bits,
         "input_bits": 8,
         "input_signed": False,
     }
@@ -113,6 +128,8 @@ def main():
         "gap8_final_output_bytes": final_output_bytes,
         "expected_final_output_bytes": args.expected_output_bytes,
         "gap8_final_output_checksums": final_checksums,
+        "gap8_bnrelu_constant_bits": args.bnrelu_bits,
+        "overflow_safe_affine_intermediate": args.bnrelu_bits == 64,
         "activation_checksums_loaded": golden_files_present,
         "golden_activation_files": golden_count,
         "activation_checksums_skipped": not golden_files_present,
@@ -124,7 +141,7 @@ def main():
         from network_generate import network_generate
 
         dory_config = {
-            "BNRelu_bits": 32,
+            "BNRelu_bits": args.bnrelu_bits,
             "input_bits": 8,
             "input_signed": False,
             "onnx_file": args.onnx.name,
@@ -160,7 +177,10 @@ def main():
             r"Layers_name\[i\], i\);\n)"
             r"(\s+if \(i == \d+\)\n\s+checksum\([^;]+;\n)"
             r"(#endif)",
-            r"\1\3\n#ifdef DORY_CHECKSUM_HARNESS\n\2#endif",
+            r'\1\n#ifdef DORY_CHECKSUM_HARNESS\n'
+            r'    checksum("layer", L2_output, activations_out_size[i], '
+            r'activations_out_checksum[i][exec]);\n'
+            r'#endif\n\3',
             bounded,
         )
         network_source.write_text(bounded)

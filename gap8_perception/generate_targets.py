@@ -11,11 +11,18 @@ import cv2
 import numpy as np
 
 from gap8_perception.rollout_targets import (
+    course_collision_boxes,
+    fixed_normal_offsets_to_boxes,
     load_calibration,
     simulate_candidate_rollouts,
 )
 from gap8_perception.gate_geometry import associate_gate
-from gap8_perception.targets import class_mask, gate_opening_and_corners
+from gap8_perception.output_contract import NORMAL_ANGLES_DEG
+from gap8_perception.targets import (
+    class_mask,
+    gate_opening_and_corners,
+    reliable_gate_corner_view,
+)
 
 
 def main():
@@ -62,11 +69,18 @@ def main():
     gate_projection_error = np.full(len(monos), np.nan, dtype=np.float16)
     gate_translation_camera = np.full((len(monos), 3), np.nan, dtype=np.float32)
     gate_rotation_camera = np.full((len(monos), 3, 3), np.nan, dtype=np.float32)
+    fixed_normal_offsets = np.zeros((len(monos), 4), dtype=np.float16)
+    fixed_normal_confidence = np.zeros((len(monos), 4), dtype=np.uint8)
     poses = [
         json.loads(line)
         for line in (args.shard / "poses.jsonl").read_text().splitlines()
     ]
     camera_matrix, distortion = load_calibration(args.calibration)
+    scene_metadata = json.loads((args.shard / "scene_metadata.json").read_text())
+    collision_boxes = course_collision_boxes(scene_metadata)
+    inner_opening_m = float(scene_metadata.get("gate_clear_opening_m", [0.45])[0])
+    outer_edge_m = float(scene_metadata.get("gate_outer_size_m", [0.66])[0])
+    corner_label_extent_m = (inner_opening_m + outer_edge_m) / 2.0
 
     for row, mono in enumerate(monos):
         local = int(mono.stem.rsplit("_", 1)[1])
@@ -81,6 +95,13 @@ def main():
         corners[row] = xy.astype(np.float16)
         corner_valid[row] = valid
         global_indices[row] = poses[local]["global_index"]
+        offsets, confidence = fixed_normal_offsets_to_boxes(
+            poses[local]["eye_m"], poses[local]["target_m"],
+            camera_matrix, distortion, collision_boxes,
+            args.drone_radius_m + args.safety_margin_m,
+        )
+        fixed_normal_offsets[row] = offsets.astype(np.float16)
+        fixed_normal_confidence[row] = confidence * 255
         if valid:
             associated, projection, projection_error = associate_gate(
                 xy,
@@ -88,8 +109,12 @@ def main():
                 poses[local]["target_m"],
                 camera_matrix,
                 distortion,
+                inner_opening_m=inner_opening_m,
+                outer_edge_m=outer_edge_m,
             )
             gate_index[row] = associated
+            corners[row] = projection["pixels_ordered"].astype(np.float16)
+            corner_valid[row] = reliable_gate_corner_view(corners[row])
             gate_projected_corners[row] = projection["pixels_ordered"].astype(
                 np.float16
             )
@@ -118,6 +143,7 @@ def main():
                 safety_margin_m=args.safety_margin_m,
                 acceleration_limit_mps2=args.acceleration_limit_mps2,
                 attitude_limit_deg=args.attitude_limit_deg,
+                boxes=collision_boxes,
             )
             danger[row, variant] = rollout["collision"] * 255
             urgency[row, variant] = np.rint(
@@ -177,6 +203,10 @@ def main():
         gate_projection_error_px_f16=gate_projection_error,
         gate_translation_camera_m_f32=gate_translation_camera,
         gate_rotation_camera_f32=gate_rotation_camera,
+        fixed_normal_offsets_m_f16=fixed_normal_offsets,
+        fixed_normal_confidence_u8=fixed_normal_confidence,
+        corner_label_extent_m_f32=np.asarray(corner_label_extent_m, np.float32),
+        corner_label_convention=np.asarray("gate_frame_centerline"),
     )
     summary = {
         "shard": args.shard.name,
@@ -184,6 +214,8 @@ def main():
         "state_variants_per_image": variants,
         "training_records": len(monos),
         "corner_valid_images": int(corner_valid.sum()),
+        "corner_label_convention": "gate_frame_centerline",
+        "corner_label_extent_m": corner_label_extent_m,
         "danger_positive_fraction": float((danger >= 128).mean()),
         "danger_positive_fraction_by_speed": {
             str(speed): float((danger[:, variant] >= 128).mean())
@@ -194,6 +226,12 @@ def main():
             for variant, speed in enumerate(speeds)
         },
         "mean_inverse_range": float(inverse_range.mean() / 255.0),
+        "fixed_normal_offsets": {
+            "angles_deg": list(NORMAL_ANGLES_DEG),
+            "mean_m": fixed_normal_offsets.astype(np.float32).mean(axis=0).tolist(),
+            "visible_fraction": (fixed_normal_confidence.mean(axis=0) / 255.0).tolist(),
+            "body_frame_assumption": "camera optical forward/left/up because source poses omit vehicle attitude",
+        },
         "range_target": (
             "first calibrated viewing-ray intersection with collision-volume-"
             "inflated scene AABBs, clipped at 6 m; independent of speed"
