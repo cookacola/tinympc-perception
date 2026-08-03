@@ -1,0 +1,113 @@
+{
+  "architecture": "Gap8STDCSharedDoryNet",
+  "graphs": [
+    {
+      "graph": "encoder",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/encoder/encoder_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Floor",
+        "Mul"
+      ],
+      "output_epsilon": 0.08654969185590744,
+      "output_offset": [
+        0.0
+      ],
+      "parity_feature_mae": 0.2194623351097107,
+      "parity_feature_max": 4.485634803771973,
+      "integer_output_shape": [
+        1,
+        32,
+        30,
+        40
+      ],
+      "integer_nonzero": 27680,
+      "integer_layers": 11,
+      "parity_images": 512
+    },
+    {
+      "graph": "corner_head",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/corner_head/corner_head_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Mul"
+      ],
+      "input_epsilon": 0.08654969185590744,
+      "output_epsilon": 0.035684287548065186,
+      "output_offset": [
+        5.898506505584717,
+        5.7032502723693845,
+        7.697502000427246,
+        5.727203233337402
+      ],
+      "learned_bias": [
+        -0.01988922990858555,
+        -0.39433032274246216,
+        -0.06018334627151489,
+        -0.026028143242001534
+      ],
+      "parity_logit_mae": 0.15657964741131375,
+      "parity_logit_max": 1.8781951235771182,
+      "parity_probability_mae": 0.005111832605150201,
+      "parity_probability_max": 0.2961672900851748,
+      "parity_corner_peak_mean_heatmap_px": 1.1903593077286574,
+      "parity_corner_peak_p95_heatmap_px": 7.865520587052315,
+      "integer_output_shape": [
+        1,
+        4,
+        30,
+        40
+      ],
+      "integer_nonzero": 4800,
+      "integer_layers": 3,
+      "parity_images": 512
+    },
+    {
+      "graph": "danger_head",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/danger_head/danger_head_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Floor",
+        "Mul"
+      ],
+      "input_epsilon": 0.08654969185590744,
+      "output_epsilon": 0.34079399704933167,
+      "output_offset": [
+        16.512078149414062
+      ],
+      "learned_bias": [
+        -0.012773600406944752
+      ],
+      "parity_logit_mae": 4.8366309259534805,
+      "parity_logit_max": 64.30737776605636,
+      "parity_probability_mae": 0.06837817935018901,
+      "parity_probability_max": 0.9411628985532761,
+      "parity_corner_peak_mean_heatmap_px": null,
+      "parity_corner_peak_p95_heatmap_px": null,
+      "integer_output_shape": [
+        1,
+        1,
+        8,
+        10
+      ],
+      "integer_nonzero": 80,
+      "integer_layers": 35,
+      "parity_images": 512
+    }
+  ]
+}

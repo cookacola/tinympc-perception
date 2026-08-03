@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "onnx": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/corner_head/corner_head_int.onnx",
+  "dory_frontend": "NEMO",
+  "dory_frontend_nodes": 6,
+  "frontend_node_names": [
+    "Convolution",
+    "BNRelu",
+    "Convolution",
+    "BNRelu",
+    "Convolution",
+    "BNRelu"
+  ],
+  "single_output_graph": true,
+  "gap8_backend_tiling_passed": true,
+  "gap8_fused_hardware_nodes": 3,
+  "gap8_total_macs": 1036800,
+  "gap8_max_l1_tile_bytes_estimate": 35200,
+  "gap8_l1_capacity_bytes": 64000,
+  "gap8_final_output_bits": 8,
+  "gap8_final_output_bytes": 4800,
+  "expected_final_output_bytes": 4800,
+  "gap8_final_output_checksums": [
+    381011
+  ],
+  "activation_checksums_loaded": true,
+  "golden_activation_files": 3,
+  "activation_checksums_skipped": false,
+  "remaining_gate": "compile generated C and run GVSOC/physical GAP8 parity",
+  "generated_c_passed": true,
+  "generated_app_dir": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/corner_head_gap8_application",
+  "generated_files": 42
+}

@@ -1,0 +1,480 @@
+{
+  "checkpoint": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1/best_total.pt",
+  "images": 5000,
+  "resource_profile": {
+    "encoder_graph": {
+      "architecture": "Gap8STDCSharedEncoderGraph",
+      "input_nchw": [
+        1,
+        1,
+        120,
+        160
+      ],
+      "outputs": {
+        "output": [
+          1,
+          32,
+          30,
+          40
+        ]
+      },
+      "parameters": 4272,
+      "macs": 6547200,
+      "largest_single_activation_int8_bytes": 76800,
+      "layers": [
+        {
+          "name": "stem.0.0",
+          "macs": 691200,
+          "shape": [
+            1,
+            16,
+            60,
+            80
+          ]
+        },
+        {
+          "name": "stem.1.depthwise.0",
+          "macs": 691200,
+          "shape": [
+            1,
+            16,
+            60,
+            80
+          ]
+        },
+        {
+          "name": "stem.1.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            16,
+            60,
+            80
+          ]
+        },
+        {
+          "name": "stage1.0.depthwise.0",
+          "macs": 172800,
+          "shape": [
+            1,
+            16,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "stage1.0.pointwise.0",
+          "macs": 614400,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "stage1.1.block.depthwise.0",
+          "macs": 345600,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "stage1.1.block.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "stage1.2.block.depthwise.0",
+          "macs": 345600,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "stage1.2.block.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        }
+      ]
+    },
+    "corner_head_graph": {
+      "architecture": "Gap8STDCSharedCornerHeadGraph",
+      "input_nchw": [
+        1,
+        32,
+        30,
+        40
+      ],
+      "outputs": {
+        "output": [
+          1,
+          4,
+          30,
+          40
+        ]
+      },
+      "parameters": 964,
+      "macs": 1036800,
+      "largest_single_activation_int8_bytes": 38400,
+      "layers": [
+        {
+          "name": "head.0.depthwise.0",
+          "macs": 345600,
+          "shape": [
+            1,
+            32,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "head.0.pointwise.0",
+          "macs": 614400,
+          "shape": [
+            1,
+            16,
+            30,
+            40
+          ]
+        },
+        {
+          "name": "head.1",
+          "macs": 76800,
+          "shape": [
+            1,
+            4,
+            30,
+            40
+          ]
+        }
+      ]
+    },
+    "danger_head_graph": {
+      "architecture": "Gap8STDCSharedDangerHeadGraph",
+      "input_nchw": [
+        1,
+        32,
+        30,
+        40
+      ],
+      "outputs": {
+        "output": [
+          1,
+          1,
+          8,
+          10
+        ]
+      },
+      "parameters": 97697,
+      "macs": 11095680,
+      "largest_single_activation_int8_bytes": 19200,
+      "layers": [
+        {
+          "name": "stage2.0.depthwise.0",
+          "macs": 86400,
+          "shape": [
+            1,
+            32,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.0.pointwise.0",
+          "macs": 614400,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.1.block.depthwise.0",
+          "macs": 172800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.1.block.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.2.block.depthwise.0",
+          "macs": 172800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.2.block.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.3.block.depthwise.0",
+          "macs": 172800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage2.3.block.pointwise.0",
+          "macs": 1228800,
+          "shape": [
+            1,
+            64,
+            15,
+            20
+          ]
+        },
+        {
+          "name": "stage3.0.depthwise.0",
+          "macs": 46080,
+          "shape": [
+            1,
+            64,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.0.pointwise.0",
+          "macs": 491520,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.1.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.1.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.2.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.2.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.3.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.3.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.4.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.4.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.5.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.5.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.6.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.6.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.7.block.depthwise.0",
+          "macs": 69120,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "stage3.7.block.pointwise.0",
+          "macs": 737280,
+          "shape": [
+            1,
+            96,
+            8,
+            10
+          ]
+        },
+        {
+          "name": "head",
+          "macs": 7680,
+          "shape": [
+            1,
+            1,
+            8,
+            10
+          ]
+        }
+      ]
+    },
+    "combined_parameters": 102933,
+    "combined_macs": 18679680,
+    "shared_feature_shape": [
+      32,
+      30,
+      40
+    ],
+    "learned_operators": [
+      "Conv",
+      "ReLU",
+      "Add"
+    ],
+    "contains_resize": false,
+    "contains_concat": false
+  },
+  "corners": {
+    "mean_error_image_px": 6.319552828947052,
+    "pck_at_4px": 0.8434816549570648,
+    "gate_detection_at_0.25": {
+      "tp": 3473,
+      "fp": 141,
+      "fn": 370,
+      "tn": 1016,
+      "precision": 0.9609850581073602,
+      "recall": 0.9037210512620348,
+      "false_negative_rate": 0.09627894873796514,
+      "iou": 0.8717369477911646
+    }
+  },
+  "danger_at_0.5": {
+    "tp": 231832,
+    "fp": 10547,
+    "fn": 5151,
+    "tn": 152470,
+    "precision": 0.956485504107204,
+    "recall": 0.9782642636813611,
+    "false_negative_rate": 0.021735736318638888,
+    "iou": 0.9365814244738011
+  }
+}

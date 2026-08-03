@@ -26,9 +26,27 @@ class MultiTaskDataset(Dataset):
         expand_state_variants: bool = False,
     ):
         split_data = json.loads(split_file.read_text())
+        shard_spec = split_data[split]
+        if isinstance(shard_spec, dict):
+            required = {"start", "stop", "step"}
+            missing = required.difference(shard_spec)
+            if missing:
+                raise ValueError(
+                    f"{split_file}:{split} range spec lacks {sorted(missing)}"
+                )
+            shard_names = [
+                f"shard_{index:09d}"
+                for index in range(
+                    int(shard_spec["start"]),
+                    int(shard_spec["stop"]),
+                    int(shard_spec["step"]),
+                )
+            ]
+        else:
+            shard_names = shard_spec
         self.records = []
         images_seen = 0
-        for shard_name in split_data[split]:
+        for shard_name in shard_names:
             shard = dataset_root / shard_name
             target_path = targets_root / f"{shard_name}.npz"
             if not target_path.is_file():

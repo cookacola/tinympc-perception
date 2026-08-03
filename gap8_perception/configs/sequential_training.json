@@ -1,0 +1,39 @@
+{
+  "authority": "docs/Completed_CNN_Design_Document.md",
+  "architecture": "SequentialSTDCNet",
+  "seed": 2026,
+  "input_nchw": [1, 1, 120, 160],
+  "output_nchw": [1, 12, 15, 20],
+  "target_schema": "sequential_fixed_normal_v1",
+  "corner_label_convention": "gate_frame_centerline",
+  "corner_sigma_heatmap_cells": 0.85,
+  "offset_range_m": [0.0, 6.0],
+  "fixed_normal_angles_deg": [-40.0, -13.333333, 13.333333, 40.0],
+  "inflation": {"drone_radius_m": 0.10, "label_margin_m": 0.10},
+  "loss_weights": {
+    "heatmap": 1.0,
+    "offset": 2.0,
+    "confidence": 1.0,
+    "field_consistency": 0.1,
+    "optimistic_offset_huber": 2.0,
+    "conservative_offset_huber": 1.0
+  },
+  "optimizer": {"name": "AdamW", "learning_rate": 0.002, "weight_decay": 0.0001},
+  "epochs_fp32": 80,
+  "epochs_qat": 12,
+  "batch_size_fp32": 32,
+  "batch_size_qat": 64,
+  "observation_dropout_probability": 0.10,
+  "sensor_augmentation_probability": 1.0,
+  "selection_order": [
+    "validation_offset_overestimation_p95_m",
+    "validation_offset_overestimation_mean_m",
+    "validation_total_loss"
+  ],
+  "real_training": {
+    "labels": "centerline corners only",
+    "safety_loss_mask": 0,
+    "default_flights": ["flight_06", "flight_07"],
+    "sampling_weight": 0.35
+  }
+}

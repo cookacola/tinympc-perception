@@ -1,4 +1,7 @@
-# HM01B0 v4 deployment pipeline (2026-07-27)
+# Historical HM01B0 v4 pipeline (non-canonical, 2026-07-27)
+
+This report concerns a superseded dense-danger model. The canonical contract
+is the sequential 12-channel completed CNN design.
 
 The selected float model is the retained-gate `Gap8PackedMultiTaskNet` with
 7,784 parameters and 11.904 M MACs. Its input is the native 160×160

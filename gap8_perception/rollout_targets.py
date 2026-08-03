@@ -9,27 +9,60 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .output_contract import NORMAL_ANGLES_DEG
+
 
 def _box(center, size):
     center, size = np.asarray(center, np.float32), np.asarray(size, np.float32)
     return np.stack((center - size / 2, center + size / 2))
 
 
-def course_collision_boxes() -> np.ndarray:
-    """AABBs matching the fixed generator scene's collision geometry."""
+def course_collision_boxes(scene_metadata: dict | None = None) -> np.ndarray:
+    """AABBs matching a shard's rendered collision geometry.
+
+    Legacy shards omit ``collision_obstacles`` and retain the original two
+    course cubes. New scenario shards record their exact obstacle AABBs in
+    scene metadata so safety targets cannot silently use a different layout.
+    """
     boxes = [
         _box((0, 0, -0.08), (8, 8, 0.12)),
         _box((0, 2.0, 0.04), (4.1, 0.06, 0.08)),
         _box((0, -2.0, 0.04), (4.1, 0.06, 0.08)),
         _box((-2.0, 0, 0.04), (0.06, 4.1, 0.08)),
         _box((2.0, 0, 0.04), (0.06, 4.1, 0.08)),
-        _box((-0.55, 0.65, 0.30), (0.55, 0.55, 0.60)),
-        _box((0.60, -0.65, 0.38), (0.50, 0.75, 0.76)),
     ]
-    gate_outer, gate_inner = 0.66, 0.45
+    obstacle_specs = (
+        scene_metadata.get("collision_obstacles")
+        if scene_metadata is not None
+        else None
+    )
+    if obstacle_specs is None:
+        obstacle_specs = [
+            {"center_m": [-0.55, 0.65, 0.30], "size_m": [0.55, 0.55, 0.60]},
+            {"center_m": [0.60, -0.65, 0.38], "size_m": [0.50, 0.75, 0.76]},
+        ]
+    boxes.extend(
+        _box(spec["center_m"], spec["size_m"]) for spec in obstacle_specs
+    )
+    # Calibrated-v2 renderer: physical NewBeeDrone gate outer diameter and
+    # clear aperture.  The former corpus used 0.66/0.45 m, which neither
+    # matched the revised mesh nor the close real-flight gate distribution.
+    gate_outer = float(
+        (scene_metadata or {}).get("gate_outer_size_m", [0.66])[0]
+    )
+    gate_inner = float(
+        (scene_metadata or {}).get("gate_clear_opening_m", [0.45])[0]
+    )
     frame = (gate_outer - gate_inner) / 2
     offset, center_z = gate_inner / 2 + frame / 2, 0.55
-    for x, y in ((-1.30, -0.45), (1.30, 0.45)):
+    gate_centers = (scene_metadata or {}).get(
+        "gate_centers_m",
+        (scene_metadata or {}).get("layout", {}).get(
+            "gates", [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55)]
+        ),
+    )
+    for x, y, gate_z in gate_centers:
+        center_z = float(gate_z)
         boxes.extend(
             [
                 _box((x, y - offset, center_z), (0.025, frame, gate_outer)),
@@ -124,6 +157,62 @@ def conservative_range_to_boxes(
     hit = exit_ >= entry
     distances = np.where(hit, entry, np.inf).min(axis=1)
     return np.minimum(distances, max_range_m).astype(np.float32)
+
+
+def fixed_normal_offsets_to_boxes(
+    eye: np.ndarray,
+    target: np.ndarray,
+    camera_matrix: np.ndarray,
+    distortion: np.ndarray,
+    boxes: np.ndarray,
+    clearance_radius: float,
+    angles_deg: tuple[float, ...] = NORMAL_ANGLES_DEG,
+    max_range_m: float = 6.0,
+    image_width: int = 160,
+    image_height: int = 120,
+    crop_top: int = 20,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return body-forward fixed-normal clearance labels and visibility masks.
+
+    This source corpus records camera eye/look-at but not vehicle attitude.  We
+    therefore use the calibrated camera optical frame as the body frame for
+    label generation: +x is optical forward, +y is camera-left, +z is up.
+    The confidence mask is false when a direction lies outside image support.
+    """
+    eye = np.asarray(eye, dtype=np.float32)
+    forward = np.asarray(target, dtype=np.float32) - eye
+    forward /= np.linalg.norm(forward)
+    right = np.cross(forward, np.asarray((0.0, 0.0, 1.0), np.float32))
+    right /= np.linalg.norm(right)
+    left = -right
+    directions = []
+    for angle in angles_deg:
+        radians = math.radians(angle)
+        direction = math.cos(radians) * forward + math.sin(radians) * left
+        directions.append(direction / np.linalg.norm(direction))
+    directions = np.asarray(directions, dtype=np.float32)
+    offsets = conservative_range_to_boxes(
+        eye, directions, boxes, clearance_radius, max_range_m=max_range_m
+    )
+
+    # Camera coordinates are (+right, +down, +forward).  projectPoints uses
+    # the same calibrated distortion path as the renderer/label generator.
+    camera_vectors = np.stack(
+        (directions @ right, directions @ (-np.cross(right, forward)), directions @ forward),
+        axis=1,
+    )
+    pixels = cv2.projectPoints(
+        camera_vectors.astype(np.float64), np.zeros(3), np.zeros(3),
+        camera_matrix.astype(np.float64), distortion.astype(np.float64),
+    )[0].reshape(-1, 2)
+    supported = (
+        (camera_vectors[:, 2] > 0)
+        & (pixels[:, 0] >= 0)
+        & (pixels[:, 0] < image_width)
+        & (pixels[:, 1] >= crop_top)
+        & (pixels[:, 1] < crop_top + image_height)
+    )
+    return offsets.astype(np.float32), supported.astype(np.uint8)
 
 
 def simulate_candidate_rollouts(

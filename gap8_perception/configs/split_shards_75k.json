@@ -1,0 +1,12 @@
+{
+  "seed": 20260731,
+  "grouping": "500-frame Isaac Sim episode; all frames in an episode remain in one split",
+  "mixture": {
+    "calibrated_track_matched_frames": 45000,
+    "realistically_randomized_frames": 22500,
+    "hard_negative_frames": 7500
+  },
+  "train": {"start": 0, "stop": 60000, "step": 500},
+  "validation": {"start": 60000, "stop": 67500, "step": 500},
+  "test": {"start": 67500, "stop": 75000, "step": 500}
+}
