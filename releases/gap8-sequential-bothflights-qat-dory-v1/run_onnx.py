@@ -17,12 +17,12 @@ GRID_WIDTH, GRID_HEIGHT = 20, 15
 SCORE_LIMIT = 6.0
 OFFSET_MAX = 6.0
 COLORS = ((0, 220, 255), (0, 255, 0), (255, 100, 0), (255, 0, 255))
+DIRECTION_DEGREES = (-40.0, -13.333333, 13.333333, 40.0)
+DIRECTION_NAMES = ("outer", "center", "center", "outer")
 
 
-def preprocess(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-    if image is None:
-        raise ValueError(f"could not read {path}")
+def preprocess_image(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Apply the model's sensor-frame/crop contract to a monochrome image."""
     if image.shape == (160, 160):
         sensor_frame = image
         crop = image[20:140, :]
@@ -32,6 +32,13 @@ def preprocess(path: Path) -> tuple[np.ndarray, np.ndarray]:
     else:
         raise ValueError("expected a grayscale 160x160 sensor frame or 160x120 center crop")
     return sensor_frame, crop.astype(np.float32)[None, None]
+
+
+def preprocess(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise ValueError(f"could not read {path}")
+    return preprocess_image(image)
 
 
 def decode(raw: np.ndarray, scale: float) -> dict:
@@ -66,16 +73,52 @@ def decode(raw: np.ndarray, scale: float) -> dict:
     }
 
 
-def annotate(sensor_frame: np.ndarray, result: dict) -> np.ndarray:
-    panel = cv2.cvtColor(sensor_frame, cv2.COLOR_GRAY2BGR)
-    for point, color in zip(result["corners_xy_crop"], COLORS):
-        cv2.drawMarker(panel, (round(point[0]), round(point[1] + 20)), color, cv2.MARKER_CROSS, 14, 1)
-    state = "GATE VALID" if result["gate_valid"] else "GATE REJECTED"
-    cv2.rectangle(panel, (0, 0), (160, 40), (0, 0, 0), -1)
-    cv2.putText(panel, state, (3, 11), cv2.FONT_HERSHEY_SIMPLEX, 0.31, (0, 255, 0) if result["gate_valid"] else (0, 80, 255), 1)
-    cv2.putText(panel, "d " + "/".join(f"{x:.2f}" for x in result["clearance_m"]), (3, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.26, (255, 255, 255), 1)
-    cv2.putText(panel, "c " + "/".join(f"{x:.2f}" for x in result["clearance_confidence_scores"]), (3, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.26, (255, 255, 255), 1)
+def _text(panel: np.ndarray, text: str, origin: tuple[int, int], scale: float,
+          color: tuple[int, int, int] = (235, 235, 235), thickness: int = 1) -> None:
+    cv2.putText(panel, text, origin, cv2.FONT_HERSHEY_SIMPLEX, scale, color,
+                thickness, cv2.LINE_AA)
+
+
+def _direction_panel(result: dict, safe_min: float, confidence_min: float) -> np.ndarray:
+    """Render all four directional outputs outside the camera image."""
+    panel = np.full((208, 270, 3), (22, 22, 22), dtype=np.uint8)
+    _text(panel, "Directional clearance classifier", (10, 18), 0.44)
+    _text(panel, f"open: d >= {safe_min:.2f} m or c < {confidence_min:+.2f}",
+          (10, 34), 0.33, (180, 180, 180))
+    clearance = result["clearance_m"]
+    confidence = result["clearance_confidence_scores"]
+    for index, (degrees, name, distance, score) in enumerate(
+            zip(DIRECTION_DEGREES, DIRECTION_NAMES, clearance, confidence)):
+        top = 43 + 32 * index
+        open_direction = score < confidence_min or distance >= safe_min
+        color = (55, 190, 55) if open_direction else (40, 70, 235)
+        cv2.rectangle(panel, (7, top), (263, top + 28), (38, 38, 38), -1)
+        cv2.rectangle(panel, (7, top), (263, top + 28), color, 1)
+        _text(panel, f"{degrees:+05.1f}  {name}", (13, top + 11), 0.34, color)
+        state = "OPEN" if open_direction else "BLOCKED"
+        _text(panel, f"{distance:.2f} m  c {score:+.2f}  {state}",
+              (13, top + 24), 0.34, (235, 235, 235))
+    _text(panel, "Bits: 0=-40  1=-13.3  2=+13.3  3=+40", (10, 197),
+          0.31, (180, 180, 180))
     return panel
+
+
+def annotate(sensor_frame: np.ndarray, result: dict, safe_min: float = 0.32,
+             confidence_min: float = 0.0) -> np.ndarray:
+    """Show the complete camera view beside all four direction decisions."""
+    camera = cv2.cvtColor(sensor_frame, cv2.COLOR_GRAY2BGR)
+    for point, color in zip(result["corners_xy_crop"], COLORS):
+        cv2.drawMarker(camera, (round(point[0]), round(point[1] + 20)), color,
+                       cv2.MARKER_CROSS, 14, 1)
+    state = "GATE VALID" if result["gate_valid"] else "GATE REJECTED"
+    camera_panel = np.full((208, 160, 3), (22, 22, 22), dtype=np.uint8)
+    camera_panel[:160] = camera
+    _text(camera_panel, state, (4, 181), 0.43,
+          (0, 255, 0) if result["gate_valid"] else (0, 80, 255))
+    _text(camera_panel, "full 160x160 sensor frame", (4, 199), 0.31,
+          (180, 180, 180))
+    return np.hstack((camera_panel,
+                      _direction_panel(result, safe_min, confidence_min)))
 
 
 def main() -> None:
