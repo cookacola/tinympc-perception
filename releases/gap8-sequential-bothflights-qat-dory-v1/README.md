@@ -33,8 +33,9 @@ python live_onnx.py \
   --safe-min 0.32 --display-scale 3
 ```
 
-It replays at 8 fps by default; use `--replay-fps 2` to inspect slowly, `q`
-or Escape to stop, or `--no-display --jsonl` to emit one prediction per saved
+It replays at 8 fps by default; use `--replay-fps 2` to inspect slowly, or
+`--replay-step` to advance one image at a time with Space or Enter. `q` or
+Escape stops replay; `--no-display --jsonl` emits one prediction per saved
 frame.
 
 ## Live NanoCockpit Wi-Fi inference

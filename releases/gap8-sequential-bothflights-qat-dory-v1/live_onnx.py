@@ -95,6 +95,8 @@ def main() -> None:
                         help="replay saved PGM/PNG/JPEG frames instead of connecting to a deck")
     parser.add_argument("--replay-fps", type=float, default=8.0,
                         help="saved-image replay rate when displaying (default: %(default)s)")
+    parser.add_argument("--replay-step", action="store_true",
+                        help="show one saved image at a time; Space, Enter, or Right advances")
     parser.add_argument("--model", type=Path, default=ROOT / "sequential_int.onnx")
     parser.add_argument("--max-frames", type=int, help="stop after this many frames")
     parser.add_argument("--no-display", action="store_true", help="do not open an OpenCV window")
@@ -115,6 +117,10 @@ def main() -> None:
         parser.error("--display-scale must be positive")
     if args.replay_fps <= 0:
         parser.error("--replay-fps must be positive")
+    if args.replay_step and args.image_dir is None:
+        parser.error("--replay-step requires --image-dir")
+    if args.replay_step and args.no_display:
+        parser.error("--replay-step requires the OpenCV display")
     if args.image_dir is not None and not args.image_dir.is_dir():
         parser.error(f"--image-dir is not a directory: {args.image_dir}")
 
@@ -174,8 +180,13 @@ def main() -> None:
                                      fy=args.display_scale,
                                      interpolation=cv2.INTER_NEAREST)
                 cv2.imshow("NanoCockpit sequential ONNX", display)
-                delay_ms = max(1, round(1000.0 / args.replay_fps)) if source_path is not None else 1
-                key = cv2.waitKey(delay_ms) & 0xFF
+                if source_path is not None and args.replay_step:
+                    # OpenCV maps the Right arrow differently by backend; Space
+                    # and Enter are portable explicit advance controls.
+                    key = cv2.waitKey(0) & 0xFF
+                else:
+                    delay_ms = max(1, round(1000.0 / args.replay_fps)) if source_path is not None else 1
+                    key = cv2.waitKey(delay_ms) & 0xFF
                 if key in (27, ord("q")):
                     break
             if args.max_frames is not None and frame_count >= args.max_frames:
