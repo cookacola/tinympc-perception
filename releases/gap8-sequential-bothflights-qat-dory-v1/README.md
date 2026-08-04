@@ -20,6 +20,23 @@ pip install -r requirements.txt
 python run_onnx.py /path/to/frame.png --annotated-image prediction.png
 ```
 
+## Saved-frame replay
+
+Use the live diagnostic interface without a powered drone by passing a capture
+directory to `live_onnx.py`. A normal capture root is accepted directly: its
+raw `frames/` directory is selected automatically and generated replay panels
+are ignored.
+
+```bash
+python live_onnx.py \
+  --image-dir /Users/char_chen/School/TinyMPC/tinympc-crazyflie/apps/controller_tinympc_eigen/capture_runs/handheld_head_on_01 \
+  --safe-min 0.32 --display-scale 3
+```
+
+It replays at 8 fps by default; use `--replay-fps 2` to inspect slowly, `q`
+or Escape to stop, or `--no-display --jsonl` to emit one prediction per saved
+frame.
+
 ## Live NanoCockpit Wi-Fi inference
 
 `live_onnx.py` runs this same ONNX and decoder on NanoCockpit's CPX stream;

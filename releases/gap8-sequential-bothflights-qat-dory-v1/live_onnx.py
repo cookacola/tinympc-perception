@@ -15,6 +15,7 @@ import signal
 import sys
 import time
 from pathlib import Path
+from typing import Iterator
 
 import cv2
 import numpy as np
@@ -68,11 +69,32 @@ def prepare_stream_frame(image: np.ndarray, resize: bool) -> tuple[np.ndarray, n
     return preprocess_image(image)
 
 
+def replay_images(directory: Path) -> Iterator[tuple[np.ndarray, int, Path]]:
+    """Yield saved monochrome sensor frames in stable filename order."""
+    suffixes = {".pgm", ".png", ".jpg", ".jpeg", ".bmp"}
+    # A standard handheld capture has ``frames/`` plus generated diagnostic
+    # panels. Prefer its source frames so passing the capture root is safe.
+    source_directory = directory / "frames" if (directory / "frames").is_dir() else directory
+    paths = sorted(path for path in source_directory.rglob("*")
+                   if path.is_file() and path.suffix.lower() in suffixes)
+    if not paths:
+        raise ValueError(f"no supported images found under {source_directory}")
+    for frame_id, path in enumerate(paths, start=1):
+        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            raise ValueError(f"could not read {path}")
+        yield image, frame_id, path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("-n", "--host", default="192.168.4.1", help="AI-deck Wi-Fi IP or hostname")
     parser.add_argument("-p", "--port", type=int, default=5000, help="NanoCockpit CPX TCP port")
     parser.add_argument("--nanocockpit-root", type=Path, help="path to the NanoCockpit checkout")
+    parser.add_argument("--image-dir", type=Path,
+                        help="replay saved PGM/PNG/JPEG frames instead of connecting to a deck")
+    parser.add_argument("--replay-fps", type=float, default=8.0,
+                        help="saved-image replay rate when displaying (default: %(default)s)")
     parser.add_argument("--model", type=Path, default=ROOT / "sequential_int.onnx")
     parser.add_argument("--max-frames", type=int, help="stop after this many frames")
     parser.add_argument("--no-display", action="store_true", help="do not open an OpenCV window")
@@ -91,24 +113,40 @@ def main() -> None:
         parser.error("--max-frames must be positive")
     if args.display_scale <= 0:
         parser.error("--display-scale must be positive")
+    if args.replay_fps <= 0:
+        parser.error("--replay-fps must be positive")
+    if args.image_dir is not None and not args.image_dir.is_dir():
+        parser.error(f"--image-dir is not a directory: {args.image_dir}")
 
-    StreamerClient = load_streamer_client(args.nanocockpit_root)
     manifest = json.loads((ROOT / "quantization_manifest.json").read_text())
     session = ort.InferenceSession(str(args.model), providers=["CPUExecutionProvider"])
     input_name = session.get_inputs()[0].name
     frame_count = 0
     started = time.monotonic()
-    client = StreamerClient(host=args.host, port=args.port, udp_send=args.udp_send)
+    client = None
+    if args.image_dir is None:
+        StreamerClient = load_streamer_client(args.nanocockpit_root)
+        client = StreamerClient(host=args.host, port=args.port, udp_send=args.udp_send)
     # StreamerClient installs a shutdown-only SIGINT handler. Restore Python's
     # normal handler so Ctrl+C raises KeyboardInterrupt, reaches ``finally``,
     # and exits instead of merely issuing repeated shutdown requests.
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
     try:
-        for image, _tof_frame, metadata in client.receive():
+        if args.image_dir is not None:
+            frames = ((image, frame_id, path, None) for image, frame_id, path
+                      in replay_images(args.image_dir))
+        else:
+            assert client is not None
+            frames = ((image, metadata.frame_id, None, metadata) for image, _tof_frame, metadata
+                      in client.receive())
+
+        for image, frame_id, source_path, metadata in frames:
             # Keep the normal NanoCockpit streaming RTT/flow-control path alive,
             # but deliberately do not send this model's output to the aircraft.
-            client.send_reply(metadata, None)
+            if client is not None:
+                assert metadata is not None
+                client.send_reply(metadata, None)
             sensor_frame, tensor = prepare_stream_frame(image, args.resize_to_model)
             raw = session.run(None, {input_name: tensor})[0]
             result = decode(raw, float(manifest["scale"]))
@@ -117,10 +155,12 @@ def main() -> None:
             result.update(
                 frame=frame_count,
                 stream_source_size=[int(image.shape[1]), int(image.shape[0])],
-                stream_frame_id=int(metadata.frame_id),
+                stream_frame_id=int(frame_id),
                 fps=frame_count / elapsed if elapsed else 0.0,
                 model_sha256="620fdb49f94abd7adf212b15b0858c49ed46f85f89fdbc4e05d28453c5c9f9b6",
             )
+            if source_path is not None:
+                result["source_image"] = str(source_path)
             if args.jsonl:
                 print(json.dumps(result, separators=(",", ":")), flush=True)
 
@@ -134,7 +174,8 @@ def main() -> None:
                                      fy=args.display_scale,
                                      interpolation=cv2.INTER_NEAREST)
                 cv2.imshow("NanoCockpit sequential ONNX", display)
-                key = cv2.waitKey(1) & 0xFF
+                delay_ms = max(1, round(1000.0 / args.replay_fps)) if source_path is not None else 1
+                key = cv2.waitKey(delay_ms) & 0xFF
                 if key in (27, ord("q")):
                     break
             if args.max_frames is not None and frame_count >= args.max_frames:
@@ -142,7 +183,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        client.shutdown()
+        if client is not None:
+            client.shutdown()
         if not args.no_display:
             cv2.destroyAllWindows()
 
