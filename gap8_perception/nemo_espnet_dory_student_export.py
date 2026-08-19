@@ -111,6 +111,7 @@ def main():
     parser.add_argument("--calibration-images", type=int, default=256)
     parser.add_argument("--parity-images", type=int, default=512)
     parser.add_argument("--residual-requantization-factor", type=int, default=1)
+    parser.add_argument("--qat-directory", type=Path)
     args = parser.parse_args()
     base.image_tensor = paired_image_tensor
     calibration = sampled(temporal_pairs(args.dataset, "train"), args.calibration_images)
@@ -121,6 +122,9 @@ def main():
     encoder_integer, encoder_float, encoder_report = base.quantize_encoder(
         encoder, calibration, parity, args.output / "encoder",
         args.residual_requantization_factor,
+        qat_checkpoint=(
+            args.qat_directory / "encoder_qat.pt" if args.qat_directory else None
+        ),
     )
     reports = [encoder_report]
     for name, model in (
@@ -133,6 +137,10 @@ def main():
             name, model, encoder_integer, encoder_float,
             encoder_report["output_epsilon"], calibration, parity,
             args.output / name, args.residual_requantization_factor,
+            qat_checkpoint=(
+                args.qat_directory / (name + "_qat.pt")
+                if args.qat_directory else None
+            ),
         ))
     report = {
         "format": "espnet-dory-student-nemo-v1",
