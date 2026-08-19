@@ -13,8 +13,8 @@ source /home/cchen/miniconda3/etc/profile.d/conda.sh
 conda activate /home/cchen/isaacsim-env
 SOURCE=${SOURCE:-/home/cchen/tinympc-gate-texture}
 WORKSPACE=${WORKSPACE:-/home/cchen/isaacsim-workspace/workspace}
-TEACHER=${TEACHER:-$WORKSPACE/newbeedrone_multi_course_safety_constrained_v3/best.pt}
-OUTPUT=${OUTPUT:-$WORKSPACE/espnet_dory_student_v1}
+TEACHER=${TEACHER:-$WORKSPACE/newbeedrone_multi_course_safety_constrained_v3/selected_for_deployment.pt}
+OUTPUT=${OUTPUT:-$WORKSPACE/espnet_dory_student_v2}
 mkdir -p "$WORKSPACE/logs"
 cd "$SOURCE"
 echo "Job: $SLURM_JOB_ID node: $(hostname) conda: $CONDA_PREFIX python: $(which python) CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
