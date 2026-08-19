@@ -33,8 +33,14 @@ def parse_args():
     )
     parser.add_argument(
         "--gate-texture-version",
-        choices=("v1", "hm01b0_v2"),
-        default="hm01b0_v2",
+        choices=("v1", "hm01b0_v2", "photo_v1"),
+        default="photo_v1",
+    )
+    parser.add_argument(
+        "--gate-target-probability",
+        type=float,
+        default=0.5,
+        help="Probability that a sampled camera targets one of the two gates.",
     )
     return parser.parse_args()
 
@@ -42,6 +48,8 @@ def parse_args():
 args = parse_args()
 args.output_dir = args.output_dir.expanduser().resolve()
 args.camera_calibration = args.camera_calibration.expanduser().resolve()
+if not 0.0 <= args.gate_target_probability <= 1.0:
+    raise ValueError("gate target probability must be in [0, 1]")
 camera_calibration = json.loads(args.camera_calibration.read_text())
 sys.argv = [sys.argv[0]]
 os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
@@ -70,13 +78,18 @@ if not extension_manager.set_extension_enabled_immediate(
     raise RuntimeError("failed to enable RTX sensor/lens-distortion schemas")
 
 CLASS_NAMES = ["background", "course", "boundary", "obstacle", "gate", "lab_clutter"]
-ASSET_ROOT = Path(__file__).resolve().parents[1] / "assets/gates"
+ASSET_ROOT = Path(__file__).resolve().parents[1] / "gates"
 GATE_TEXTURE_DIR = (
     ASSET_ROOT
     if args.gate_texture_version == "v1"
     else ASSET_ROOT / "newbeedrone_hm01b0_v2"
 )
 GATE_TEXTURE_SUFFIX = "v1" if args.gate_texture_version == "v1" else "v2"
+PHOTO_TEXTURE_PATH = (
+    ASSET_ROOT
+    / "newbeedrone_photo_reference_v1"
+    / "newbeedrone_gate_front_uv_v1.png"
+)
 
 
 def create_box(
@@ -118,6 +131,115 @@ def create_gate_face(
         "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying
     )
     st.Set(Vt.Vec2fArray([(0, 1), (1, 1), (1, 0), (0, 0)]))
+    UsdShade.MaterialBindingAPI(mesh).Bind(UsdShade.Material(material))
+    rep.functional.modify.semantics(mesh.GetPrim(), {"class": "gate"}, mode="add")
+    return mesh.GetPrim()
+
+
+def rounded_square_points(half_extent, radius, segments_per_corner=8):
+    """Return a counter-clockwise rounded-square contour in local Y-Z."""
+    if not 0.0 < radius < half_extent:
+        raise ValueError("rounded-square radius must be inside its half extent")
+    centers_and_angles = (
+        ((half_extent - radius, half_extent - radius), (0.0, math.pi / 2.0)),
+        ((-half_extent + radius, half_extent - radius), (math.pi / 2.0, math.pi)),
+        ((-half_extent + radius, -half_extent + radius), (math.pi, 3.0 * math.pi / 2.0)),
+        ((half_extent - radius, -half_extent + radius), (3.0 * math.pi / 2.0, 2.0 * math.pi)),
+    )
+    points = []
+    for (center_y, center_z), (start, stop) in centers_and_angles:
+        for angle in np.linspace(start, stop, segments_per_corner, endpoint=False):
+            points.append(
+                (
+                    center_y + radius * math.cos(float(angle)),
+                    center_z + radius * math.sin(float(angle)),
+                )
+            )
+    return points
+
+
+def create_textured_gate_ring(
+    path,
+    x,
+    y_center,
+    z_center,
+    outer_size,
+    inner_size,
+    material,
+    mirror_u=False,
+):
+    """Create one UV-mapped rounded-ring face using the approved full-gate atlas."""
+    stage = omni.usd.get_context().get_stage()
+    mesh = UsdGeom.Mesh.Define(stage, path)
+    outer = rounded_square_points(outer_size / 2.0, radius=0.090)
+    inner = rounded_square_points(inner_size / 2.0, radius=0.075)
+    points = []
+    st_values = []
+    for contour in (outer, inner):
+        for local_y, local_z in contour:
+            points.append((x, y_center + local_y, z_center + local_z))
+            u = 0.5 + local_y / outer_size
+            if mirror_u:
+                u = 1.0 - u
+            st_values.append((u, 0.5 - local_z / outer_size))
+    count = len(outer)
+    face_indices = []
+    for index in range(count):
+        following = (index + 1) % count
+        face_indices.extend((index, following, count + following, count + index))
+    mesh.CreatePointsAttr(Vt.Vec3fArray(points))
+    mesh.CreateFaceVertexCountsAttr(Vt.IntArray([4] * count))
+    mesh.CreateFaceVertexIndicesAttr(Vt.IntArray(face_indices))
+    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
+    mesh.CreateDoubleSidedAttr(True)
+    st = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
+        "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.vertex
+    )
+    st.Set(Vt.Vec2fArray(st_values))
+    UsdShade.MaterialBindingAPI(mesh).Bind(UsdShade.Material(material))
+    rep.functional.modify.semantics(mesh.GetPrim(), {"class": "gate"}, mode="add")
+    return mesh.GetPrim()
+
+
+def create_gate_edge_walls(
+    path,
+    x_center,
+    y_center,
+    z_center,
+    depth,
+    outer_size,
+    inner_size,
+    material,
+):
+    """Give the rounded fabric ring physical depth for oblique camera views."""
+    stage = omni.usd.get_context().get_stage()
+    mesh = UsdGeom.Mesh.Define(stage, path)
+    contours = (
+        rounded_square_points(outer_size / 2.0, radius=0.090),
+        rounded_square_points(inner_size / 2.0, radius=0.075),
+    )
+    points = []
+    face_indices = []
+    face_count = 0
+    for contour in contours:
+        base = len(points)
+        for x_offset in (-depth / 2.0, depth / 2.0):
+            points.extend(
+                (x_center + x_offset, y_center + local_y, z_center + local_z)
+                for local_y, local_z in contour
+            )
+        count = len(contour)
+        for index in range(count):
+            following = (index + 1) % count
+            face_indices.extend(
+                (base + index, base + following, base + count + following, base + count + index)
+            )
+            face_count += 1
+    mesh.CreatePointsAttr(Vt.Vec3fArray(points))
+    mesh.CreateFaceVertexCountsAttr(Vt.IntArray([4] * face_count))
+    mesh.CreateFaceVertexIndicesAttr(Vt.IntArray(face_indices))
+    mesh.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
+    mesh.CreateDoubleSidedAttr(True)
     UsdShade.MaterialBindingAPI(mesh).Bind(UsdShade.Material(material))
     rep.functional.modify.semantics(mesh.GetPrim(), {"class": "gate"}, mode="add")
     return mesh.GetPrim()
@@ -205,76 +327,113 @@ def build_scene():
         parent="/World",
     )
     gate_materials = {}
-    for part in ("top", "bottom", "left", "right"):
-        texture_path = (
-            GATE_TEXTURE_DIR / f"newbeedrone_{part}_{GATE_TEXTURE_SUFFIX}.png"
-        )
-        if not texture_path.is_file():
-            raise FileNotFoundError(f"missing gate texture: {texture_path}")
-        gate_materials[part] = rep.functional.create.material(
+    if args.gate_texture_version == "photo_v1":
+        if not PHOTO_TEXTURE_PATH.is_file():
+            raise FileNotFoundError(f"missing approved gate texture: {PHOTO_TEXTURE_PATH}")
+        photo_material = rep.functional.create.material(
             mdl="OmniPBR.mdl",
-            diffuse_texture=str(texture_path),
+            diffuse_texture=str(PHOTO_TEXTURE_PATH),
             diffuse_color_constant=(1.0, 1.0, 1.0),
             reflection_roughness_constant=0.82,
-            # The cosmetic face meshes below provide explicit face-varying UVs.
             project_uvw=False,
-            name=f"NewBeeDrone_{part.title()}_Material",
+            name="NewBeeDrone_Approved_Photo_Material",
             parent="/World",
         )
+    else:
+        for part in ("top", "bottom", "left", "right"):
+            texture_path = (
+                GATE_TEXTURE_DIR / f"newbeedrone_{part}_{GATE_TEXTURE_SUFFIX}.png"
+            )
+            if not texture_path.is_file():
+                raise FileNotFoundError(f"missing gate texture: {texture_path}")
+            gate_materials[part] = rep.functional.create.material(
+                mdl="OmniPBR.mdl",
+                diffuse_texture=str(texture_path),
+                diffuse_color_constant=(1.0, 1.0, 1.0),
+                reflection_roughness_constant=0.82,
+                project_uvw=False,
+                name=f"NewBeeDrone_{part.title()}_Material",
+                parent="/World",
+            )
     for gate_index, (x_pos, y_center) in enumerate(((-1.30, -0.45), (1.30, 0.45))):
         gate_parent = f"/World/Course/Gate_{gate_index}"
         rep.functional.create.xform(parent="/World/Course", name=f"Gate_{gate_index}")
-        for side, y_pos in (("Left", -gate_offset), ("Right", gate_offset)):
-            create_box(
-                side,
-                (x_pos, y_center + y_pos, gate_center_z),
-                (0.025, gate_frame, gate_outer),
-                "gate",
-                parent=gate_parent,
-                material=gate_base_material,
+        if args.gate_texture_version == "photo_v1":
+            depth = 0.025
+            create_textured_gate_ring(
+                f"{gate_parent}/ApprovedFront",
+                x_pos - depth / 2.0,
+                y_center,
+                gate_center_z,
+                gate_outer,
+                gate_inner,
+                photo_material,
             )
-        for edge, z_pos in (
-            ("Bottom", gate_center_z - gate_offset),
-            ("Top", gate_center_z + gate_offset),
-        ):
-            create_box(
-                edge,
-                (x_pos, y_center, z_pos),
-                (0.025, gate_outer, gate_frame),
-                "gate",
-                parent=gate_parent,
-                material=gate_base_material,
+            create_textured_gate_ring(
+                f"{gate_parent}/ApprovedBack",
+                x_pos + depth / 2.0,
+                y_center,
+                gate_center_z,
+                gate_outer,
+                gate_inner,
+                photo_material,
+                mirror_u=True,
             )
-
-        # Cubic projected UVs collapse the printed fabric at HM01B0
-        # resolution. Overlay each front/back fabric face with a native-UV
-        # plane. Top/bottom span the full outer width; left/right fill the
-        # clear-opening height between them, matching the source strip atlas.
-        # Keep the cosmetic face clearly in front of the 25 mm collision
-        # cuboid. A sub-millimetre offset z-fights at the 160x160 RTX depth
-        # precision and makes the dark base mesh win.
-        face_epsilon = 0.018
-        face_specs = [
-            ("left", y_center - gate_offset, gate_center_z,
-             (gate_frame, 1.0, gate_inner)),
-            ("right", y_center + gate_offset, gate_center_z,
-             (gate_frame, 1.0, gate_inner)),
-            ("bottom", y_center, gate_center_z - gate_offset,
-             (gate_outer, 1.0, gate_frame)),
-            ("top", y_center, gate_center_z + gate_offset,
-             (gate_outer, 1.0, gate_frame)),
-        ]
-        for part, y_pos, z_pos, scale in face_specs:
-            for face_index, x_offset in enumerate((-face_epsilon, face_epsilon)):
-                create_gate_face(
-                    f"{gate_parent}/{part.title()}_FabricFace_{face_index}",
-                    x_pos + x_offset,
-                    y_pos,
-                    z_pos,
-                    scale[0],
-                    scale[2],
-                    gate_materials[part],
+            create_gate_edge_walls(
+                f"{gate_parent}/FabricEdges",
+                x_pos,
+                y_center,
+                gate_center_z,
+                depth,
+                gate_outer,
+                gate_inner,
+                gate_base_material,
+            )
+        else:
+            for side, y_pos in (("Left", -gate_offset), ("Right", gate_offset)):
+                create_box(
+                    side,
+                    (x_pos, y_center + y_pos, gate_center_z),
+                    (0.025, gate_frame, gate_outer),
+                    "gate",
+                    parent=gate_parent,
+                    material=gate_base_material,
                 )
+            for edge, z_pos in (
+                ("Bottom", gate_center_z - gate_offset),
+                ("Top", gate_center_z + gate_offset),
+            ):
+                create_box(
+                    edge,
+                    (x_pos, y_center, z_pos),
+                    (0.025, gate_outer, gate_frame),
+                    "gate",
+                    parent=gate_parent,
+                    material=gate_base_material,
+                )
+
+            face_epsilon = 0.018
+            face_specs = [
+                ("left", y_center - gate_offset, gate_center_z,
+                 (gate_frame, 1.0, gate_inner)),
+                ("right", y_center + gate_offset, gate_center_z,
+                 (gate_frame, 1.0, gate_inner)),
+                ("bottom", y_center, gate_center_z - gate_offset,
+                 (gate_outer, 1.0, gate_frame)),
+                ("top", y_center, gate_center_z + gate_offset,
+                 (gate_outer, 1.0, gate_frame)),
+            ]
+            for part, y_pos, z_pos, scale in face_specs:
+                for face_index, x_offset in enumerate((-face_epsilon, face_epsilon)):
+                    create_gate_face(
+                        f"{gate_parent}/{part.title()}_FabricFace_{face_index}",
+                        x_pos + x_offset,
+                        y_pos,
+                        z_pos,
+                        scale[0],
+                        scale[2],
+                        gate_materials[part],
+                    )
 
     # Lab clutter remains outside the 4 m x 4 m course.
     rep.functional.create.xform(parent="/World", name="LabClutter")
@@ -336,10 +495,13 @@ def sample_camera(rng):
         [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55),
          (-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)]
     )
-    point_index = int(rng.integers(0, len(points)))
+    if rng.random() < args.gate_target_probability:
+        point_index = int(rng.integers(0, 2))
+    else:
+        point_index = int(rng.integers(2, len(points)))
     target = points[point_index].copy()
     target += rng.normal(
-        (0, 0, 0), (0.10, 0.10, 0.08) if point_index < 2 else (0.20, 0.20, 0.12)
+        (0, 0, 0), (0.06, 0.06, 0.05) if point_index < 2 else (0.20, 0.20, 0.12)
     )
     if point_index < 2:
         # The gate plane is Y-Z: approach it primarily along X so the square
@@ -347,9 +509,12 @@ def sample_camera(rng):
         # from the course interior; approaching from the outside would clamp
         # the eye against the course boundary and put the fabric frame almost
         # on the camera.
-        distance = float(rng.uniform(0.9, 2.3))
+        # Keep the 0.555 m label square roughly 51--88 px wide at fx=183 px:
+        # large enough for corner regression without near-field cropping.
+        distance = float(rng.uniform(1.15, 2.0))
         inward_azimuth = math.pi if point_index == 0 else 0.0
-        azimuth = float(rng.normal(inward_azimuth, 0.12))
+        azimuth_offset = float(rng.uniform(-math.radians(18), math.radians(18)))
+        azimuth = inward_azimuth + azimuth_offset
     else:
         # Keep the camera outside the two obstacle volumes.
         distance = float(rng.uniform(1.8, 2.8))
@@ -358,7 +523,8 @@ def sample_camera(rng):
     y = float(np.clip(target[1] - distance * math.sin(azimuth), -1.85, 1.85))
     if point_index < 2:
         target[2] = float(np.clip(target[2], 0.42, 0.62))
-        z = float(np.clip(target[2] + rng.uniform(-0.15, 0.50), 0.28, 1.15))
+        elevation = float(rng.uniform(math.radians(-12), math.radians(18)))
+        z = float(target[2] + distance * math.tan(elevation))
     else:
         target[2] = float(np.clip(target[2], 0.18, 0.62))
         z = float(np.clip(target[2] + rng.uniform(0.25, 1.00), 0.48, 1.50))
@@ -381,14 +547,39 @@ def main():
                 "gate_outer_size_m": [0.66, 0.66],
                 "gate_clear_opening_m": [0.45, 0.45],
                 "gate_frame_width_m": 0.105,
+                "gate_corner_supervision": {
+                    "definition": "midpoint between corresponding inner and outer corners",
+                    "corner_square_size_m": [0.555, 0.555],
+                    "matches": "real-flight labeled corner convention",
+                },
                 "gate_texture": {
                     "version": f"newbeedrone_{args.gate_texture_version}",
                     "appearance": "black fabric with HM01B0-visible honeycomb panels, seams, and white NewBeeDrone branding",
-                    "atlas": "assets/gates/newbeedrone_hm01b0_v2/newbeedrone_square_atlas_v2.png",
+                    "atlas": (
+                        "gates/newbeedrone_photo_reference_v1/newbeedrone_gate_front_uv_v1.png"
+                        if args.gate_texture_version == "photo_v1"
+                        else f"gates/newbeedrone_{args.gate_texture_version}"
+                    ),
+                    "source": (
+                        "approved product-photo reference"
+                        if args.gate_texture_version == "photo_v1"
+                        else "legacy renderer texture"
+                    ),
                 },
-                "geometry": "fixed",
+                "geometry": (
+                    "rounded extruded UV ring"
+                    if args.gate_texture_version == "photo_v1"
+                    else "fixed box rails"
+                ),
                 "outside_context": ["tables", "computers", "shelves"],
                 "randomized": ["camera_position", "camera_look_at"],
+                "gate_target_probability": args.gate_target_probability,
+                "gate_view_sampling": {
+                    "distance_m": [1.15, 2.0],
+                    "maximum_horizontal_off_axis_degrees": 18,
+                    "elevation_degrees": [-12, 18],
+                    "purpose": "exclude far and extreme-angle corner-training views",
+                },
                 "camera_calibration": camera_calibration,
                 "references": [
                     "https://newbeedrone.com/collections/all/products/newbeedrone-micro-race-gate-square",
