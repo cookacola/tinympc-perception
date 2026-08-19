@@ -28,6 +28,12 @@ BACKGROUND_PROFILES = (
     ("beige_classroom", (0.42, 0.40, 0.36), (0.55, 0.48, 0.36), (0.73, 0.67, 0.54), (0.78, 0.74, 0.64), (0.18, 0.45, 0.28)),
     ("high_contrast_tiles", (0.18, 0.18, 0.18), (0.12, 0.12, 0.12), (0.78, 0.78, 0.75), (0.50, 0.52, 0.55), (0.55, 0.12, 0.16)),
 )
+COURSE_FAMILIES_BY_SPLIT = {
+    "train": ("open_field", "slalom", "corridor", "chicane", "mixed_primitives", "dense_clutter"),
+    "validation": ("offset_rooms", "pillar_forest"),
+    "test": ("warehouse_aisles", "wall_maze"),
+}
+TEXTURE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 
 
 def parse_args():
@@ -66,16 +72,151 @@ def parse_args():
         action="store_true",
         help="Omit all gate geometry and sample only obstacle/background views.",
     )
+    parser.add_argument(
+        "--layout-family",
+        choices=("fixed_v1", "multi_course_v2"),
+        default="multi_course_v2",
+    )
+    parser.add_argument(
+        "--asset-split",
+        choices=("train", "validation", "test"),
+        default="train",
+        help="Select disjoint course families and internet texture assets.",
+    )
+    parser.add_argument(
+        "--clutter-texture-manifest",
+        type=Path,
+        help="Manifest produced by download_commons_clutter_textures.py.",
+    )
     return parser.parse_args()
 
 
 args = parse_args()
 args.output_dir = args.output_dir.expanduser().resolve()
 args.camera_calibration = args.camera_calibration.expanduser().resolve()
+if args.clutter_texture_manifest is not None:
+    args.clutter_texture_manifest = args.clutter_texture_manifest.expanduser().resolve()
 if not 0.0 <= args.gate_target_probability <= 1.0:
     raise ValueError("gate target probability must be in [0, 1]")
 camera_calibration = json.loads(args.camera_calibration.read_text())
 background_profile = BACKGROUND_PROFILES[(args.start_index // max(args.frames, 1)) % len(BACKGROUND_PROFILES)]
+
+
+def sample_layout():
+    if args.layout_family == "fixed_v1":
+        return {
+            "family": "fixed_v1",
+            "seed": None,
+            "gates": [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55)],
+            "obstacles": [
+                {"primitive": "box", "center": (-0.55, 0.65, 0.30), "size": (0.55, 0.55, 0.60)},
+                {"primitive": "box", "center": (0.60, -0.65, 0.38), "size": (0.50, 0.75, 0.76)},
+            ],
+        }
+    layout_seed = args.seed + args.start_index
+    rng = np.random.default_rng(layout_seed)
+    families = COURSE_FAMILIES_BY_SPLIT[args.asset_split]
+    family = families[(args.start_index // max(args.frames, 1)) % len(families)]
+    gates = [
+        (-1.30, float(rng.uniform(-0.75, 0.75)), float(rng.uniform(0.48, 0.66))),
+        (1.30, float(rng.uniform(-0.75, 0.75)), float(rng.uniform(0.48, 0.66))),
+    ]
+    obstacles = []
+
+    def add(center, size, primitive="box"):
+        center = tuple(float(value) for value in center)
+        size = tuple(float(value) for value in size)
+        obstacles.append({"primitive": primitive, "center": center, "size": size})
+
+    def add_random(count, primitives=("box", "cylinder", "cone", "sphere")):
+        attempts = 0
+        while count > 0 and attempts < 1000:
+            attempts += 1
+            primitive = str(rng.choice(primitives))
+            sx, sy = rng.uniform(0.24, 0.78, size=2)
+            if primitive in {"sphere", "cylinder", "cone"}:
+                sy = sx
+            sz = float(rng.uniform(0.28, 1.20))
+            x, y = rng.uniform(-1.35, 1.35, size=2)
+            if min(np.hypot(x - gate[0], y - gate[1]) for gate in gates) < 0.58 + max(sx, sy) / 2:
+                continue
+            if any(
+                abs(x - item["center"][0]) < (sx + item["size"][0]) / 2 + 0.10
+                and abs(y - item["center"][1]) < (sy + item["size"][1]) / 2 + 0.10
+                for item in obstacles
+            ):
+                continue
+            add((x, y, sz / 2), (sx, sy, sz), primitive)
+            count -= 1
+        if count:
+            raise RuntimeError(f"could not place all obstacles for {family}")
+
+    if family == "open_field":
+        add_random(int(rng.integers(4, 7)))
+    elif family == "slalom":
+        for index, x in enumerate(np.linspace(-0.85, 0.85, 5)):
+            diameter = float(rng.uniform(0.28, 0.52))
+            height = float(rng.uniform(0.55, 1.15))
+            add((x, (-1) ** index * rng.uniform(0.42, 0.82), height / 2),
+                (diameter, diameter, height), str(rng.choice(("cylinder", "cone"))))
+    elif family == "corridor":
+        gap = float(rng.uniform(0.75, 1.15))
+        for side in (-1, 1):
+            add((0.0, side * (gap / 2 + 0.34), 0.55), (2.2, 0.55, 1.10))
+        add_random(2, ("box", "cylinder"))
+    elif family == "chicane":
+        side = int(rng.choice((-1, 1)))
+        add((-0.55, -side * 0.78, 0.65), (0.28, 1.65, 1.30))
+        add((0.55, side * 0.78, 0.65), (0.28, 1.65, 1.30))
+        add_random(2, ("box", "cylinder"))
+    elif family == "mixed_primitives":
+        add_random(int(rng.integers(6, 9)))
+    elif family == "dense_clutter":
+        add_random(int(rng.integers(9, 13)), ("box", "cylinder", "cone"))
+    elif family == "offset_rooms":
+        add((-0.45, -1.05, 0.75), (0.24, 1.65, 1.50))
+        add((0.45, 1.05, 0.75), (0.24, 1.65, 1.50))
+        add_random(4, ("box", "cylinder"))
+    elif family == "pillar_forest":
+        for x, y in ((-0.75, -0.75), (-0.75, 0.75), (0.0, 0.0), (0.75, -0.75), (0.75, 0.75)):
+            diameter = float(rng.uniform(0.24, 0.42))
+            height = float(rng.uniform(0.70, 1.35))
+            add((x, y, height / 2), (diameter, diameter, height), "cylinder")
+    elif family == "warehouse_aisles":
+        for x in (-0.62, 0.62):
+            for y in (-1.05, 1.05):
+                add((x, y, 0.72), (0.45, 1.05, 1.44))
+        add_random(3, ("box",))
+    elif family == "wall_maze":
+        add((-0.70, -0.90, 0.72), (0.22, 1.55, 1.44))
+        add((0.0, 0.90, 0.72), (0.22, 1.55, 1.44))
+        add((0.70, -0.90, 0.72), (0.22, 1.55, 1.44))
+        add_random(3, ("box", "cylinder"))
+    else:
+        raise ValueError(f"unknown course family: {family}")
+    return {"family": family, "seed": layout_seed, "gates": gates, "obstacles": obstacles}
+
+
+def texture_assets():
+    if args.clutter_texture_manifest is None:
+        return []
+    manifest = json.loads(args.clutter_texture_manifest.read_text())
+    root = args.clutter_texture_manifest.parent
+    selected = []
+    for asset in manifest.get("assets", []):
+        path = root / asset["file"]
+        if (
+            asset.get("catalog") == "Openverse"
+            and asset.get("split") == args.asset_split
+            and path.suffix.lower() in TEXTURE_EXTENSIONS
+            and path.is_file()
+        ):
+            selected.append({**asset, "path": path})
+    return selected
+
+
+LAYOUT = sample_layout()
+CLUTTER_TEXTURES = texture_assets()
 sys.argv = [sys.argv[0]]
 os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
 
@@ -123,6 +264,43 @@ def create_box(
             [Gf.Vec3f(float(color[0]), float(color[1]), float(color[2]))]
         )
     return prim
+
+
+def create_obstacle(name, spec, material=None, color=None):
+    creators = {
+        "box": rep.functional.create.cube,
+        "sphere": rep.functional.create.sphere,
+        "cylinder": rep.functional.create.cylinder,
+        "cone": rep.functional.create.cone,
+    }
+    primitive = spec["primitive"]
+    prim = creators[primitive](
+        position=spec["center"], scale=spec["size"], parent="/World/Course",
+        name=name, material=material,
+    )
+    rep.functional.modify.semantics(prim, {"class": "obstacle"}, mode="add")
+    if color is not None and material is None:
+        UsdGeom.Gprim(prim).CreateDisplayColorAttr(
+            [Gf.Vec3f(float(color[0]), float(color[1]), float(color[2]))]
+        )
+    return prim
+
+
+def create_scene_material(name, texture, color, roughness, texture_scale):
+    values = {
+        "mdl": "OmniPBR.mdl",
+        "diffuse_color_constant": tuple(float(value) for value in color),
+        "reflection_roughness_constant": float(roughness),
+        "name": name,
+        "parent": "/World",
+    }
+    if texture is not None:
+        values.update(
+            diffuse_texture=str(texture),
+            project_uvw=True,
+            texture_scale=(float(texture_scale), float(texture_scale)),
+        )
+    return rep.functional.create.material(**values)
 
 
 def create_gate_face(
@@ -305,6 +483,16 @@ def build_scene():
     sun_rotate_z = sun_xform.AddRotateZOp()
 
     profile_name, floor_color, tile_a, tile_b, wall_color, accent_color = background_profile
+    appearance_rng = np.random.default_rng((LAYOUT["seed"] or args.seed) + 700001)
+    texture_order = list(CLUTTER_TEXTURES)
+    appearance_rng.shuffle(texture_order)
+    scene_materials = [
+        create_scene_material(
+            f"InternetTexture_{index}", asset["path"], (1.0, 1.0, 1.0),
+            appearance_rng.uniform(0.62, 0.96), appearance_rng.uniform(0.55, 2.4),
+        )
+        for index, asset in enumerate(texture_order[:16])
+    ]
     # Deterministic per-shard materials prevent the no-gate classifier from
     # learning one room or floor texture as its negative shortcut.
     create_box(
@@ -315,7 +503,15 @@ def build_scene():
         for column in range(8):
             x = -1.75 + column * 0.5
             y = -1.75 + row * 0.5
-            wood = tile_a if (row + column) % 2 else tile_b
+            if LAYOUT["family"] in {"corridor", "warehouse_aisles"}:
+                palette_index = column % 2
+            elif LAYOUT["family"] in {"chicane", "wall_maze"}:
+                palette_index = row % 2
+            elif LAYOUT["family"] == "dense_clutter":
+                palette_index = int(appearance_rng.integers(0, 2))
+            else:
+                palette_index = (row + column) % 2
+            wood = (tile_a, tile_b)[palette_index]
             create_box(
                 f"WoodTile_{row}_{column}", (x, y, 0.0), (0.49, 0.49, 0.04),
                 "course", color=wood,
@@ -328,12 +524,16 @@ def build_scene():
     ]:
         create_box(name, position, scale, "boundary", color=(0.12, 0.12, 0.12))
 
-    for name, position, scale in (
+    for wall_index, (name, position, scale) in enumerate((
         ("Backdrop_N", (0.0, 4.0, 1.5), (8.0, 0.10, 3.0)),
         ("Backdrop_W", (-4.0, 0.0, 1.5), (0.10, 8.0, 3.0)),
         ("Backdrop_E", (4.0, 0.0, 1.5), (0.10, 8.0, 3.0)),
-    ):
-        create_box(name, position, scale, "lab_clutter", parent="/World", color=wall_color)
+    )):
+        material = scene_materials[wall_index % len(scene_materials)] if scene_materials else None
+        create_box(
+            name, position, scale, "lab_clutter", parent="/World",
+            color=None if material is not None else wall_color, material=material,
+        )
     # Repeated panels produce different high-frequency background textures at
     # the HM01B0 resolution without introducing gate-like square openings.
     for panel in range(10):
@@ -341,15 +541,17 @@ def build_scene():
         create_box(f"WallAccent_{panel}", (-3.91, y, 1.0 + 0.35 * (panel % 3)),
                    (0.04, 0.32, 0.18), "lab_clutter", parent="/World", color=accent_color)
 
-    # Exactly two obstacles.
-    create_box(
-        "Obstacle_0", (-0.55, 0.65, 0.30), (0.55, 0.55, 0.60),
-        "obstacle", color=(0.12, 0.28, 0.65),
-    )
-    create_box(
-        "Obstacle_1", (0.60, -0.65, 0.38), (0.50, 0.75, 0.76),
-        "obstacle", color=(0.68, 0.14, 0.10),
-    )
+    obstacle_colors = ((0.12, 0.28, 0.65), (0.68, 0.14, 0.10), (0.18, 0.58, 0.24),
+                       (0.62, 0.54, 0.16), (0.42, 0.23, 0.55))
+    for obstacle_index, obstacle in enumerate(LAYOUT["obstacles"]):
+        material = (
+            scene_materials[(obstacle_index + 3) % len(scene_materials)]
+            if scene_materials and appearance_rng.random() < 0.75 else None
+        )
+        create_obstacle(
+            f"Obstacle_{obstacle_index}", obstacle, material=material,
+            color=None if material is not None else obstacle_colors[obstacle_index % len(obstacle_colors)],
+        )
 
     # Exactly two NewBeeDrone Micro Race Gate - Square assemblies.
     # Commercial listings describe an approximately 0.66 m outer square and
@@ -395,8 +597,8 @@ def build_scene():
                 name=f"NewBeeDrone_{part.title()}_Material",
                 parent="/World",
             )
-    gate_positions = () if args.no_gates else ((-1.30, -0.45), (1.30, 0.45))
-    for gate_index, (x_pos, y_center) in enumerate(gate_positions):
+    gate_positions = () if args.no_gates else LAYOUT["gates"]
+    for gate_index, (x_pos, y_center, gate_center_z) in enumerate(gate_positions):
         gate_parent = f"/World/Course/Gate_{gate_index}"
         rep.functional.create.xform(parent="/World/Course", name=f"Gate_{gate_index}")
         if args.gate_texture_version == "photo_v1":
@@ -555,21 +757,20 @@ def apply_sensor_model(output_dir, seed):
 
 def sample_camera(rng):
     # Aim primarily at course features so the physically small micro gates and
-    # both obstacles are well represented while retaining broad pose diversity.
+    # varied obstacles are well represented while retaining broad pose diversity.
+    obstacle_points = [item["center"] for item in LAYOUT["obstacles"]]
     if args.no_gates:
-        points = np.asarray([(-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)])
+        points = np.asarray(obstacle_points)
         point_index = int(rng.integers(0, len(points)))
         targets_gate = False
     else:
-        points = np.asarray(
-            [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55),
-             (-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)]
-        )
+        gate_count = len(LAYOUT["gates"])
+        points = np.asarray(LAYOUT["gates"] + obstacle_points)
         if rng.random() < args.gate_target_probability:
-            point_index = int(rng.integers(0, 2))
+            point_index = int(rng.integers(0, gate_count))
         else:
-            point_index = int(rng.integers(2, len(points)))
-        targets_gate = point_index < 2
+            point_index = int(rng.integers(gate_count, len(points)))
+        targets_gate = point_index < gate_count
     target = points[point_index].copy()
     target += rng.normal(
         (0, 0, 0), (0.06, 0.06, 0.05) if targets_gate else (0.20, 0.20, 0.12)
@@ -583,7 +784,7 @@ def sample_camera(rng):
         # Keep the 0.555 m label square roughly 51--88 px wide at fx=183 px:
         # large enough for corner regression without near-field cropping.
         distance = float(rng.uniform(1.15, 2.0))
-        inward_azimuth = math.pi if point_index == 0 else 0.0
+        inward_azimuth = math.pi if LAYOUT["gates"][point_index][0] < 0 else 0.0
         azimuth_offset = float(rng.uniform(-math.radians(18), math.radians(18)))
         azimuth = inward_azimuth + azimuth_offset
     else:
@@ -599,7 +800,22 @@ def sample_camera(rng):
     else:
         target[2] = float(np.clip(target[2], 0.18, 0.62))
         z = float(np.clip(target[2] + rng.uniform(0.25, 1.00), 0.48, 1.50))
-    return (x, y, z), tuple(float(v) for v in target)
+    # Move a camera that landed inside an obstacle toward its target until it
+    # clears the obstacle's conservative axis-aligned envelope.
+    eye = np.asarray((x, y, z), dtype=float)
+    direction = np.asarray(target, dtype=float) - eye
+    norm = np.linalg.norm(direction)
+    if norm > 1e-6:
+        direction /= norm
+    for _ in range(20):
+        collides = any(
+            np.all(np.abs(eye - np.asarray(item["center"])) <= np.asarray(item["size"]) / 2 + 0.08)
+            for item in LAYOUT["obstacles"]
+        )
+        if not collides:
+            break
+        eye += direction * 0.10
+    return tuple(float(value) for value in eye), tuple(float(v) for v in target)
 
 
 def main():
@@ -614,7 +830,12 @@ def main():
                 "floor": "alternating wooden tiles",
                 "background_profile": background_profile[0],
                 "background_profiles_available": [profile[0] for profile in BACKGROUND_PROFILES],
-                "obstacle_count": 2,
+                "course_family": LAYOUT["family"],
+                "course_family_split": args.asset_split,
+                "course_families_available": COURSE_FAMILIES_BY_SPLIT,
+                "layout_seed": LAYOUT["seed"],
+                "obstacles": LAYOUT["obstacles"],
+                "obstacle_count": len(LAYOUT["obstacles"]),
                 "gate_count": 0 if args.no_gates else 2,
                 "gate_model": None if args.no_gates else "NewBeeDrone Micro Race Gate - Square",
                 "gate_outer_size_m": [0.66, 0.66],
@@ -647,7 +868,28 @@ def main():
                 "outside_context": ["tables", "computers", "shelves"],
                 "randomized": ["camera_position", "camera_look_at", "lighting_profile",
                                "light_intensity", "light_temperature", "light_direction",
-                               "floor_palette", "wall_palette", "clutter_palette", "wall_panels"],
+                               "course_family", "obstacle_position", "obstacle_size",
+                               "obstacle_primitive", "floor_pattern", "wall_texture",
+                               "obstacle_texture", "floor_palette", "wall_palette",
+                               "clutter_palette", "wall_panels"],
+                "clutter_texture_manifest": (
+                    str(args.clutter_texture_manifest) if args.clutter_texture_manifest else None
+                ),
+                "clutter_texture_split": args.asset_split,
+                "clutter_texture_assets": [
+                    {
+                        "file": str(asset["path"]),
+                        "catalog": asset.get("catalog"),
+                        "source": asset.get("source"),
+                        "commons_page": asset.get("commons_page"),
+                        "license": asset.get("license"),
+                        "license_url": asset.get("license_url"),
+                        "artist": asset.get("artist"),
+                        "attribution": asset.get("attribution"),
+                        "source_sha256": asset.get("source_sha256"),
+                    }
+                    for asset in CLUTTER_TEXTURES
+                ],
                 "lighting_profiles": [profile[0] for profile in LIGHTING_PROFILES],
                 "gate_target_probability": args.gate_target_probability,
                 "no_gates": args.no_gates,
