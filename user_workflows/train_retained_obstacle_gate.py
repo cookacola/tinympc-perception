@@ -20,6 +20,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
 from gap8_perception.data import MultiTaskDataset
+from gap8_perception.audit_real_flights import canonical_image_order
 from gap8_perception.evaluate import local_centroid
 from gap8_perception.losses import soft_dice_loss, weighted_corner_mse
 from gap8_perception.model import ConvBNReLU, DSConv
@@ -54,7 +55,9 @@ class RealGateDataset(Dataset):
             folder = root / flight
             for line in (folder / "labels.jsonl").read_text().splitlines():
                 row = json.loads(line)
-                corners = np.asarray(row["corners"], np.float32).reshape(4, 2)
+                corners = canonical_image_order(
+                    np.asarray(row["corners"], np.float32).reshape(4, 2)
+                )[0]
                 if (corners < 0).any() or (corners[:, 0] >= 160).any() or (corners[:, 1] >= 160).any():
                     continue
                 self.records.append((folder / "stream_out" / row["image"], corners, flight))
