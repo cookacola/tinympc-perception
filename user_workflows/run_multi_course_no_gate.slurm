@@ -38,6 +38,7 @@ for attempt in 1 2 3 4 5; do
     python user_workflows/generate_course_shard.py \
       --output-dir "$partial" --frames "$FRAMES_PER_SHARD" --start-index "$start" \
       --seed "$((20260819 + attempt - 1))" --width 160 --height 160 --rt-subframes 1 \
+      --lighting-scale 3.0 \
       --gate-texture-version photo_v1 --gate-target-probability 0 --no-gates \
       --layout-family multi_course_v2 --asset-split "$asset_split" \
       --clutter-texture-manifest "$TEXTURES" \

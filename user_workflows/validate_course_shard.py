@@ -14,7 +14,7 @@ parser.add_argument("--shard", type=Path, required=True)
 parser.add_argument("--expected", type=int, required=True)
 parser.add_argument("--allow-no-gates", action="store_true")
 args = parser.parse_args()
-MINIMUM_USEFUL_MEAN = 24.0
+MINIMUM_USEFUL_MEAN = 50.0
 
 
 def numbered(pattern):

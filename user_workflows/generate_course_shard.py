@@ -44,6 +44,12 @@ def parse_args():
     parser.add_argument("--frames", type=int, default=1000)
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--lighting-scale",
+        type=float,
+        default=1.0,
+        help="Multiply all dome and sun intensities without changing camera exposure.",
+    )
     parser.add_argument("--width", type=int, default=160)
     parser.add_argument("--height", type=int, default=160)
     parser.add_argument(
@@ -100,6 +106,8 @@ if args.clutter_texture_manifest is not None:
     args.clutter_texture_manifest = args.clutter_texture_manifest.expanduser().resolve()
 if not 0.0 <= args.gate_target_probability <= 1.0:
     raise ValueError("gate target probability must be in [0, 1]")
+if args.lighting_scale <= 0:
+    raise ValueError("lighting scale must be positive")
 camera_calibration = json.loads(args.camera_calibration.read_text())
 background_profile = BACKGROUND_PROFILES[(args.start_index // max(args.frames, 1)) % len(BACKGROUND_PROFILES)]
 
@@ -707,9 +715,16 @@ def build_scene():
         float(focal_length * OVERSCAN_RESOLUTION / intrinsic[1][1])
     )
     usd_camera.CreateFocalLengthAttr(focal_length)
-    camera.CreateAttribute("omni:rtx:autoExposure:enabled", Sdf.ValueTypeNames.Bool).Set(False)
-    camera.CreateAttribute("exposure:time", Sdf.ValueTypeNames.Float).Set(0.010)
-    camera.CreateAttribute("exposure:iso", Sdf.ValueTypeNames.Float).Set(200.0)
+    sensor = camera_calibration["sensor_settings"]
+    camera.CreateAttribute("omni:rtx:autoExposure:enabled", Sdf.ValueTypeNames.Bool).Set(
+        bool(sensor["auto_exposure"])
+    )
+    camera.CreateAttribute("exposure:time", Sdf.ValueTypeNames.Float).Set(
+        float(sensor["integration_time_ms"]) / 1000.0
+    )
+    camera.CreateAttribute("exposure:iso", Sdf.ValueTypeNames.Float).Set(
+        100.0 * float(sensor["analog_gain"]) * float(sensor["digital_gain"])
+    )
     camera_xform = UsdGeom.Xformable(camera)
     camera_xform.ClearXformOpOrder()
     camera_matrix = camera_xform.MakeMatrixXform()
@@ -893,6 +908,7 @@ def main():
                     for asset in CLUTTER_TEXTURES
                 ],
                 "lighting_profiles": [profile[0] for profile in LIGHTING_PROFILES],
+                "lighting_intensity_scale": args.lighting_scale,
                 "gate_target_probability": args.gate_target_probability,
                 "no_gates": args.no_gates,
                 "gate_view_sampling": {
@@ -930,8 +946,8 @@ def main():
         profile_name, dome_base, sun_base, temperature = LIGHTING_PROFILES[
             local_index % len(LIGHTING_PROFILES)
         ]
-        dome.GetIntensityAttr().Set(float(dome_base * rng.uniform(0.85, 1.15)))
-        sun.GetIntensityAttr().Set(float(sun_base * rng.uniform(0.85, 1.15)))
+        dome.GetIntensityAttr().Set(float(args.lighting_scale * dome_base * rng.uniform(0.85, 1.15)))
+        sun.GetIntensityAttr().Set(float(args.lighting_scale * sun_base * rng.uniform(0.85, 1.15)))
         sun.GetColorTemperatureAttr().Set(float(temperature + rng.uniform(-250.0, 250.0)))
         sun_rotate_x.Set(float(rng.uniform(25.0, 70.0)))
         sun_rotate_z.Set(float(rng.uniform(0.0, 360.0)))
