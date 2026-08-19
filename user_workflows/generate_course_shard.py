@@ -21,6 +21,13 @@ LIGHTING_PROFILES = (
     ("cool", 130.0, 1050.0, 7200.0),
     ("backlit", 80.0, 1350.0, 6200.0),
 )
+BACKGROUND_PROFILES = (
+    ("warm_wood_lab", (0.35, 0.37, 0.39), (0.50, 0.24, 0.08), (0.68, 0.36, 0.12), (0.72, 0.70, 0.66), (0.18, 0.32, 0.58)),
+    ("cool_gray_workshop", (0.22, 0.24, 0.27), (0.34, 0.37, 0.40), (0.52, 0.55, 0.58), (0.43, 0.48, 0.54), (0.75, 0.33, 0.12)),
+    ("blue_mat_lab", (0.20, 0.21, 0.23), (0.08, 0.19, 0.33), (0.12, 0.32, 0.48), (0.70, 0.73, 0.76), (0.76, 0.63, 0.10)),
+    ("beige_classroom", (0.42, 0.40, 0.36), (0.55, 0.48, 0.36), (0.73, 0.67, 0.54), (0.78, 0.74, 0.64), (0.18, 0.45, 0.28)),
+    ("high_contrast_tiles", (0.18, 0.18, 0.18), (0.12, 0.12, 0.12), (0.78, 0.78, 0.75), (0.50, 0.52, 0.55), (0.55, 0.12, 0.16)),
+)
 
 
 def parse_args():
@@ -54,6 +61,11 @@ def parse_args():
         default=0.5,
         help="Probability that a sampled camera targets one of the two gates.",
     )
+    parser.add_argument(
+        "--no-gates",
+        action="store_true",
+        help="Omit all gate geometry and sample only obstacle/background views.",
+    )
     return parser.parse_args()
 
 
@@ -63,6 +75,7 @@ args.camera_calibration = args.camera_calibration.expanduser().resolve()
 if not 0.0 <= args.gate_target_probability <= 1.0:
     raise ValueError("gate target probability must be in [0, 1]")
 camera_calibration = json.loads(args.camera_calibration.read_text())
+background_profile = BACKGROUND_PROFILES[(args.start_index // max(args.frames, 1)) % len(BACKGROUND_PROFILES)]
 sys.argv = [sys.argv[0]]
 os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
 
@@ -291,16 +304,18 @@ def build_scene():
     sun_rotate_x = sun_xform.AddRotateXOp()
     sun_rotate_z = sun_xform.AddRotateZOp()
 
-    # Lab floor plus one fixed, approximately 4 m x 4 m wooden-tile course.
+    profile_name, floor_color, tile_a, tile_b, wall_color, accent_color = background_profile
+    # Deterministic per-shard materials prevent the no-gate classifier from
+    # learning one room or floor texture as its negative shortcut.
     create_box(
         "LabFloor", (0, 0, -0.08), (8, 8, 0.12), "lab_clutter",
-        parent="/World", color=(0.35, 0.37, 0.39),
+        parent="/World", color=floor_color,
     )
     for row in range(8):
         for column in range(8):
             x = -1.75 + column * 0.5
             y = -1.75 + row * 0.5
-            wood = (0.50, 0.24, 0.08) if (row + column) % 2 else (0.68, 0.36, 0.12)
+            wood = tile_a if (row + column) % 2 else tile_b
             create_box(
                 f"WoodTile_{row}_{column}", (x, y, 0.0), (0.49, 0.49, 0.04),
                 "course", color=wood,
@@ -312,6 +327,19 @@ def build_scene():
         ("EastTrim", (2.0, 0, 0.04), (0.06, 4.1, 0.08)),
     ]:
         create_box(name, position, scale, "boundary", color=(0.12, 0.12, 0.12))
+
+    for name, position, scale in (
+        ("Backdrop_N", (0.0, 4.0, 1.5), (8.0, 0.10, 3.0)),
+        ("Backdrop_W", (-4.0, 0.0, 1.5), (0.10, 8.0, 3.0)),
+        ("Backdrop_E", (4.0, 0.0, 1.5), (0.10, 8.0, 3.0)),
+    ):
+        create_box(name, position, scale, "lab_clutter", parent="/World", color=wall_color)
+    # Repeated panels produce different high-frequency background textures at
+    # the HM01B0 resolution without introducing gate-like square openings.
+    for panel in range(10):
+        y = -3.2 + 0.70 * panel
+        create_box(f"WallAccent_{panel}", (-3.91, y, 1.0 + 0.35 * (panel % 3)),
+                   (0.04, 0.32, 0.18), "lab_clutter", parent="/World", color=accent_color)
 
     # Exactly two obstacles.
     create_box(
@@ -367,7 +395,8 @@ def build_scene():
                 name=f"NewBeeDrone_{part.title()}_Material",
                 parent="/World",
             )
-    for gate_index, (x_pos, y_center) in enumerate(((-1.30, -0.45), (1.30, 0.45))):
+    gate_positions = () if args.no_gates else ((-1.30, -0.45), (1.30, 0.45))
+    for gate_index, (x_pos, y_center) in enumerate(gate_positions):
         gate_parent = f"/World/Course/Gate_{gate_index}"
         rep.functional.create.xform(parent="/World/Course", name=f"Gate_{gate_index}")
         if args.gate_texture_version == "photo_v1":
@@ -453,8 +482,8 @@ def build_scene():
     for name, position, scale, color in [
         ("TableTop_W", (-2.75, 0.0, 0.78), (1.1, 2.0, 0.10), (0.30, 0.18, 0.08)),
         ("TableTop_E", (2.75, 0.1, 0.78), (1.1, 1.8, 0.10), (0.30, 0.18, 0.08)),
-        ("Computer_W", (-2.70, 0.0, 1.15), (0.12, 0.65, 0.48), (0.03, 0.04, 0.05)),
-        ("Computer_E", (2.70, 0.1, 1.15), (0.12, 0.65, 0.48), (0.03, 0.04, 0.05)),
+        ("Computer_W", (-2.70, 0.0, 1.15), (0.12, 0.65, 0.48), accent_color),
+        ("Computer_E", (2.70, 0.1, 1.15), (0.12, 0.65, 0.48), accent_color),
         ("Shelf_Back", (0.0, 3.10, 1.10), (3.0, 0.45, 2.2), (0.25, 0.27, 0.30)),
         ("Shelf_Side", (-3.25, -2.7, 1.00), (0.60, 1.5, 2.0), (0.25, 0.27, 0.30)),
     ]:
@@ -527,19 +556,25 @@ def apply_sensor_model(output_dir, seed):
 def sample_camera(rng):
     # Aim primarily at course features so the physically small micro gates and
     # both obstacles are well represented while retaining broad pose diversity.
-    points = np.asarray(
-        [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55),
-         (-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)]
-    )
-    if rng.random() < args.gate_target_probability:
-        point_index = int(rng.integers(0, 2))
+    if args.no_gates:
+        points = np.asarray([(-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)])
+        point_index = int(rng.integers(0, len(points)))
+        targets_gate = False
     else:
-        point_index = int(rng.integers(2, len(points)))
+        points = np.asarray(
+            [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55),
+             (-0.55, 0.65, 0.30), (0.60, -0.65, 0.38)]
+        )
+        if rng.random() < args.gate_target_probability:
+            point_index = int(rng.integers(0, 2))
+        else:
+            point_index = int(rng.integers(2, len(points)))
+        targets_gate = point_index < 2
     target = points[point_index].copy()
     target += rng.normal(
-        (0, 0, 0), (0.06, 0.06, 0.05) if point_index < 2 else (0.20, 0.20, 0.12)
+        (0, 0, 0), (0.06, 0.06, 0.05) if targets_gate else (0.20, 0.20, 0.12)
     )
-    if point_index < 2:
+    if targets_gate:
         # The gate plane is Y-Z: approach it primarily along X so the square
         # opening, rather than its 25 mm edge, is visible. Approach each gate
         # from the course interior; approaching from the outside would clamp
@@ -557,7 +592,7 @@ def sample_camera(rng):
         azimuth = float(rng.uniform(-math.pi, math.pi))
     x = float(np.clip(target[0] - distance * math.cos(azimuth), -1.85, 1.85))
     y = float(np.clip(target[1] - distance * math.sin(azimuth), -1.85, 1.85))
-    if point_index < 2:
+    if targets_gate:
         target[2] = float(np.clip(target[2], 0.42, 0.62))
         elevation = float(rng.uniform(math.radians(-12), math.radians(18)))
         z = float(target[2] + distance * math.tan(elevation))
@@ -577,9 +612,11 @@ def main():
                 "course_count": 1,
                 "course_extent_m": [4.0, 4.0],
                 "floor": "alternating wooden tiles",
+                "background_profile": background_profile[0],
+                "background_profiles_available": [profile[0] for profile in BACKGROUND_PROFILES],
                 "obstacle_count": 2,
-                "gate_count": 2,
-                "gate_model": "NewBeeDrone Micro Race Gate - Square",
+                "gate_count": 0 if args.no_gates else 2,
+                "gate_model": None if args.no_gates else "NewBeeDrone Micro Race Gate - Square",
                 "gate_outer_size_m": [0.66, 0.66],
                 "gate_clear_opening_m": [0.45, 0.45],
                 "gate_frame_width_m": 0.105,
@@ -609,9 +646,11 @@ def main():
                 ),
                 "outside_context": ["tables", "computers", "shelves"],
                 "randomized": ["camera_position", "camera_look_at", "lighting_profile",
-                               "light_intensity", "light_temperature", "light_direction"],
+                               "light_intensity", "light_temperature", "light_direction",
+                               "floor_palette", "wall_palette", "clutter_palette", "wall_panels"],
                 "lighting_profiles": [profile[0] for profile in LIGHTING_PROFILES],
                 "gate_target_probability": args.gate_target_probability,
+                "no_gates": args.no_gates,
                 "gate_view_sampling": {
                     "distance_m": [1.15, 2.0],
                     "maximum_horizontal_off_axis_degrees": 18,

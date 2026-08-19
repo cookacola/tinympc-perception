@@ -12,6 +12,7 @@ import numpy as np
 parser = argparse.ArgumentParser()
 parser.add_argument("--shard", type=Path, required=True)
 parser.add_argument("--expected", type=int, required=True)
+parser.add_argument("--allow-no-gates", action="store_true")
 args = parser.parse_args()
 
 
@@ -82,7 +83,9 @@ for index, (rgb_path, depth_path, semantic_path) in enumerate(
 eyes = np.asarray([pose["eye_m"] for pose in poses], dtype=np.float64)
 if len(eyes) > 1 and np.min(np.ptp(eyes, axis=0)) < 0.1:
     errors.append("camera poses lack diversity")
-required_classes = {"course", "boundary", "obstacle", "gate"}
+required_classes = {"course", "boundary", "obstacle"}
+if not args.allow_no_gates:
+    required_classes.add("gate")
 missing_classes = sorted(required_classes - observed_classes)
 if missing_classes:
     errors.append(f"semantic classes absent from shard: {missing_classes}")
