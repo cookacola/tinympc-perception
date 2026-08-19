@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=gate_corners
-#SBATCH --array=0-3%4
+#SBATCH --array=0-0
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:rtx5090:1
+#SBATCH --nodelist=a2r-main
 #SBATCH --time=03:00:00
 #SBATCH --output=/home/cchen/isaacsim-workspace/workspace/logs/%x-%A_%a.out
 #SBATCH --error=/home/cchen/isaacsim-workspace/workspace/logs/%x-%A_%a.err
@@ -12,7 +13,9 @@ set -euo pipefail
 
 SOURCE_DIR=${SOURCE_DIR:-${SLURM_SUBMIT_DIR:-/home/cchen/tinympc-perception}}
 WORKSPACE=${WORKSPACE:-/home/cchen/isaacsim-workspace/workspace}
-PYTHON=${PYTHON:-/home/cchen/isaacsim-env/bin/python}
+source /home/cchen/miniconda3/etc/profile.d/conda.sh
+conda activate /home/cchen/isaacsim-env
+PYTHON=${PYTHON:-$(which python)}
 OUTPUT_ROOT=${OUTPUT_ROOT:-$WORKSPACE/newbeedrone_photo_v1_corners_20k}
 TOTAL_FRAMES=${TOTAL_FRAMES:-20000}
 SHARD_SIZE=${SHARD_SIZE:-1000}
@@ -23,6 +26,7 @@ mkdir -p "$OUTPUT_ROOT" "$OUTPUT_ROOT/.partial" "$WORKSPACE/logs"
 echo "Job started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID task $SLURM_ARRAY_TASK_ID"
 echo "Node: $(hostname)"
+echo "Conda prefix: ${CONDA_PREFIX:-unset}"
 echo "Python executable: $PYTHON"
 "$PYTHON" --version
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"

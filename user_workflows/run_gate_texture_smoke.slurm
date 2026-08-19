@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:rtx5090:1
-#SBATCH --exclude=a2r-main
+#SBATCH --nodelist=a2r-main
 #SBATCH --time=00:40:00
 #SBATCH --output=/home/cchen/isaacsim-workspace/workspace/logs/%x-%j.out
 #SBATCH --error=/home/cchen/isaacsim-workspace/workspace/logs/%x-%j.err
@@ -14,12 +14,15 @@ WORKSPACE=${WORKSPACE:-/home/cchen/isaacsim-workspace/workspace}
 TEXTURE_VERSION=${TEXTURE_VERSION:-photo_v1}
 OUTPUT=${OUTPUT:-$WORKSPACE/course_gate_texture_${TEXTURE_VERSION}_smoke_$SLURM_JOB_ID}
 PARTIAL=${OUTPUT}.partial
-PYTHON=/home/cchen/isaacsim-env/bin/python
+source /home/cchen/miniconda3/etc/profile.d/conda.sh
+conda activate /home/cchen/isaacsim-env
+PYTHON=$(which python)
 
 cd "$SOURCE_DIR"
 echo "Job started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $(hostname)"
+echo "Conda prefix: ${CONDA_PREFIX:-unset}"
 echo "Python executable: $PYTHON"
 "$PYTHON" --version
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
