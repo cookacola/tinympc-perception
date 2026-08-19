@@ -112,7 +112,13 @@ class RetainedObstacleGateModel(nn.Module):
         return self.obstacle(images, frame_dt, current_motion, horizon, horizon_mask)
 
     def forward_gate(self, image):
+        # Gate-domain batches must not overwrite the obstacle encoder's
+        # BatchNorm running statistics. Eval mode freezes only those buffers;
+        # autograd still propagates through every encoder parameter.
+        encoder_training = self.encoder.training
+        self.encoder.eval()
         _, middle, _ = self.encoder(image.repeat(1, 2, 1, 1))
+        self.encoder.train(encoder_training)
         corners = self.corner_head(self.corner_adapter(middle))
         mask = self.gate_head(self.gate_adapter(middle))
         return {"corners": F.interpolate(corners, (40, 40), mode="bilinear", align_corners=False),
