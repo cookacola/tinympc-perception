@@ -154,7 +154,7 @@ def infinite(loader):
     while True: yield from loader
 
 
-def train_epoch(model, loaders, optimizer, device):
+def train_epoch(model, loaders, optimizer, device, obstacle_weight):
     model.train(); totals = {}; steps = max(len(loaders["obstacle"]), len(loaders["synthetic"]))
     streams = {name: infinite(loader) for name, loader in loaders.items()}
     for _ in range(steps):
@@ -163,7 +163,7 @@ def train_epoch(model, loaders, optimizer, device):
         obstacle_loss, _ = temporal_multitask_loss(model(**obstacle_inputs(obstacle)), obstacle)
         auxiliary, parts = gate_losses(model, next(streams["synthetic"]), next(streams["real"]),
                                        next(streams["negative"]), device)
-        loss = obstacle_loss + auxiliary
+        loss = obstacle_weight * obstacle_loss + auxiliary
         if not torch.isfinite(loss): raise FloatingPointError("non-finite mixed loss")
         loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0); optimizer.step()
         values = {"total": loss, "obstacle": obstacle_loss, "gate_auxiliary": auxiliary, **parts}
@@ -221,7 +221,8 @@ def main():
     for name in ("obstacle-dataset","gate-dataset","gate-targets","gate-split-file","no-gate-dataset","real-root","obstacle-checkpoint","gate-checkpoint","output"):
         p.add_argument(f"--{name}",type=Path,required=True)
     p.add_argument("--epochs",type=int,default=20); p.add_argument("--workers",type=int,default=8); p.add_argument("--seed",type=int,default=20260819)
-    p.add_argument("--obstacle-batch-size",type=int,default=32); p.add_argument("--gate-batch-size",type=int,default=64); p.add_argument("--learning-rate",type=float,default=1e-4)
+    p.add_argument("--obstacle-batch-size",type=int,default=32); p.add_argument("--gate-batch-size",type=int,default=64)
+    p.add_argument("--encoder-learning-rate",type=float,default=5e-5); p.add_argument("--obstacle-learning-rate",type=float,default=1e-4); p.add_argument("--gate-learning-rate",type=float,default=3e-4); p.add_argument("--obstacle-weight",type=float,default=5.0)
     a=p.parse_args(); a.output.mkdir(parents=True,exist_ok=False); random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed); device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     camera=json.load(open(a.obstacle_dataset/"dataset_manifest.json"))["camera_calibration"]
     model=RetainedObstacleGateModel(a.obstacle_checkpoint,a.gate_checkpoint,camera).to(device)
@@ -238,9 +239,12 @@ def main():
     current_state={k:v.cpu().clone() for k,v in model.obstacle.state_dict().items()}; model.obstacle.load_state_dict(original_state)
     original_validation=evaluate_obstacle(model,val_obstacle,device); original_test=evaluate_obstacle(model,test_obstacle,device)
     model.obstacle.load_state_dict(current_state); premix_validation=evaluate_obstacle(model,val_obstacle,device); premix_test=evaluate_obstacle(model,test_obstacle,device)
-    optimizer=torch.optim.AdamW(model.parameters(),lr=a.learning_rate,weight_decay=1e-4); best=float("inf"); history=[]
+    encoder_parameters=list(model.encoder.parameters()); encoder_ids={id(x) for x in encoder_parameters}
+    gate_parameters=list(model.corner_adapter.parameters())+list(model.corner_head.parameters())+list(model.gate_adapter.parameters())+list(model.gate_head.parameters())+list(model.presence_head.parameters()); gate_ids={id(x) for x in gate_parameters}
+    obstacle_parameters=[x for x in model.obstacle.parameters() if id(x) not in encoder_ids]
+    optimizer=torch.optim.AdamW([{"params":encoder_parameters,"lr":a.encoder_learning_rate},{"params":obstacle_parameters,"lr":a.obstacle_learning_rate},{"params":gate_parameters,"lr":a.gate_learning_rate}],weight_decay=1e-4); best=float("inf"); history=[]
     for epoch in range(1,a.epochs+1):
-        train=train_epoch(model,train_loaders,optimizer,device); obstacle_val=evaluate_obstacle(model,val_obstacle,device); gate_val=evaluate_gate(model,*val_gate,device)
+        train=train_epoch(model,train_loaders,optimizer,device,a.obstacle_weight); obstacle_val=evaluate_obstacle(model,val_obstacle,device); gate_val=evaluate_gate(model,*val_gate,device)
         score=obstacle_val["loss"]+gate_val["synthetic_corner_mean_px"]/10+(1-gate_val["synthetic_gate_iou"])+gate_val["presence_bce"]
         record={"epoch":epoch,"train":train,"obstacle_validation":obstacle_val,"gate_validation":gate_val,"selection_score":score}; history.append(record); print(json.dumps(record),flush=True)
         state={"epoch":epoch,"model":model.state_dict(),"optimizer":optimizer.state_dict(),"record":record}
@@ -252,7 +256,8 @@ def main():
            "mixed_obstacle_validation":evaluate_obstacle(model,val_obstacle,device),"mixed_obstacle_test":evaluate_obstacle(model,test_obstacle,device),
            "mixed_gate_validation":evaluate_gate(model,*val_gate,device),"mixed_gate_test":evaluate_gate(model,*test_gate,device),
            "real_split":{"train":["flight_06"],"validation":["flight_07"],"test":["flight_08"]},"history":history,
-           "confidence":"sigmoid(presence_logit), trained with binary cross entropy","threshold":0.5}
+           "confidence":"sigmoid(presence_logit), trained with binary cross entropy","threshold":0.5,
+           "optimization":{"obstacle_weight":a.obstacle_weight,"encoder_learning_rate":a.encoder_learning_rate,"obstacle_learning_rate":a.obstacle_learning_rate,"gate_learning_rate":a.gate_learning_rate}}
     (a.output/"summary.json").write_text(json.dumps(final,indent=2)+"\n"); print(json.dumps(final),flush=True)
 
 
