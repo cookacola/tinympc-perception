@@ -56,7 +56,7 @@ for (( shard_index=SLURM_ARRAY_TASK_ID; shard_index<num_shards; shard_index+=ARR
       find "$partial" -depth -delete
     fi
     echo "generate start=$start frames=$frames attempt=$attempt"
-    if timeout --signal=TERM --kill-after=20s 240s \
+    if timeout --signal=TERM --kill-after=20s 90s \
       "$PYTHON" user_workflows/generate_course_shard.py \
         --output-dir "$partial" --frames "$frames" --start-index "$start" \
         --seed "$((BASE_SEED + attempt - 1))" --width 160 --height 160 --rt-subframes 1 \
