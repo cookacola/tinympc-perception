@@ -14,7 +14,9 @@ parser.add_argument("--shard", type=Path, required=True)
 parser.add_argument("--expected", type=int, required=True)
 parser.add_argument("--allow-no-gates", action="store_true")
 args = parser.parse_args()
-MINIMUM_USEFUL_MEAN = 50.0
+# Preserve a small, high-contrast low-light tail for domain randomization while
+# rejecting the earlier near-black frames (mean intensity around 17--20).
+MINIMUM_USEFUL_MEAN = 30.0
 
 
 def numbered(pattern):
