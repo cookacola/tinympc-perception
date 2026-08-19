@@ -90,19 +90,20 @@ def load_head(model, archive_path, graph_name):
     archive = np.load(str(archive_path))
     state = model.state_dict()
     head_prefix = "head."
-    terminal_prefix = "head.1." if graph_name == "corner_head" else "head."
+    fine_head = graph_name in ("corner_head", "gate_head")
+    terminal_prefix = "head.1." if fine_head else "head."
     for key in archive.files:
         if key.startswith(terminal_prefix):
             continue
         destination = (
             key.replace("head.0.", "head_features.")
-            if graph_name == "corner_head"
+            if fine_head
             else key
         )
         if destination in state:
             state[destination] = torch.from_numpy(archive[key])
-    weight_key = "head.1.weight" if graph_name == "corner_head" else "head.weight"
-    bias_key = "head.1.bias" if graph_name == "corner_head" else "head.bias"
+    weight_key = "head.1.weight" if fine_head else "head.weight"
+    bias_key = "head.1.bias" if fine_head else "head.bias"
     state["output_proj.0.weight"] = torch.from_numpy(archive[weight_key])
     eps = model.output_proj[1].eps
     state["output_proj.1.weight"] = torch.full_like(
@@ -257,7 +258,7 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
     model.eval()
     model_float = copy.deepcopy(model).eval()
     model = nemo.transform.quantize_pact(
-        model, dummy_input=torch.ones(1, 1, 120, 160)
+        model, dummy_input=torch.ones(1, *model.input_shape)
     )
     model.change_precision(bits=8)
     model.reset_alpha_weights()
@@ -272,26 +273,20 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
     model.qd_stage(eps_in=1.0 / 255.0)
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
-    first_image = cv2.imread(
-        str(calibration_paths[0]), cv2.IMREAD_GRAYSCALE
-    )[20:140]
-    integer_input = (
-        torch.from_numpy(first_image).unsqueeze(0).unsqueeze(0).float()
-    )
+    integer_input = image_tensor(calibration_paths[:1]) * 255.0
+    input_hwc = integer_input[0].permute(1, 2, 0).numpy()
     integer_output, layers = save_integer_fixture(
-        model, integer_input, output, first_image
+        model, integer_input, output, input_hwc
     )
     onnx_path = output / "encoder_int.onnx"
     nemo.utils.export_onnx(
-        str(onnx_path), model, model, (1, 120, 160), perm=None
+        str(onnx_path), model, model, model.input_shape, perm=None
     )
     epsilon = activation_epsilon(model)
     errors = []
     with torch.no_grad():
         for path in parity_paths:
-            image = torch.from_numpy(
-                cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)[20:140]
-            ).unsqueeze(0).unsqueeze(0).float()
+            image = image_tensor([path]) * 255.0
             reference = model_float(image / 255.0)
             decoded = model(image) * epsilon
             errors.append((decoded - reference).abs().numpy().ravel())
@@ -371,10 +366,7 @@ def quantize_head(
     model.qd_stage(eps_in=encoder_epsilon)
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
-    first_image = cv2.imread(
-        str(calibration_paths[0]), cv2.IMREAD_GRAYSCALE
-    )[20:140]
-    image = torch.from_numpy(first_image).unsqueeze(0).unsqueeze(0).float()
+    image = image_tensor(calibration_paths[:1]) * 255.0
     with torch.no_grad():
         integer_shared = encoder_integer(image)
     input_hwc = integer_shared[0].permute(1, 2, 0).numpy()
@@ -390,9 +382,7 @@ def quantize_head(
     decoded_outputs, float_outputs = [], []
     with torch.no_grad():
         for path in parity_paths:
-            image = torch.from_numpy(
-                cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)[20:140]
-            ).unsqueeze(0).unsqueeze(0).float()
+            image = image_tensor([path]) * 255.0
             float_shared = encoder_float(image / 255.0)
             reference = model_float.forward_logits(float_shared)[0].numpy()
             raw = model(encoder_integer(image))[0].numpy()
