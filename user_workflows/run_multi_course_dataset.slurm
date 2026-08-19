@@ -49,6 +49,7 @@ for attempt in 1 2 3 4 5; do
   fi
   echo "attempt $attempt failed for shard $start seed=$((20260819 + attempt - 1))" >&2
   if [[ -e "$partial" ]]; then find "$partial" -depth -delete; fi
+  sleep 15
 done
 if [[ "$generated" != true ]]; then echo "all attempts failed for shard $start" >&2; exit 77; fi
 python user_workflows/compact_course_shard.py --shard "$partial"

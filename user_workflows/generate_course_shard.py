@@ -8,6 +8,13 @@ import os
 import sys
 from pathlib import Path
 
+# Isaac Kit owns its worker pool.  Avoid initializing large, competing BLAS
+# pools before Kit starts; repeated cold launches otherwise occasionally wait
+# forever on a pre-CUDA futex on a2r-main.
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 import cv2
 import numpy as np
 
@@ -238,6 +245,9 @@ app = SimulationApp(
         "width": args.width,
         "height": args.height,
         "renderer": "RayTracedLighting",
+        "multi_gpu": False,
+        "active_gpu": 0,
+        "physics_gpu": 0,
     }
 )
 
