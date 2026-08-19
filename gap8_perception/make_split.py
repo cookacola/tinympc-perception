@@ -12,22 +12,26 @@ def main():
     parser.add_argument("dataset", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--train-count", type=int, default=40)
+    parser.add_argument("--validation-count", type=int, default=5)
+    parser.add_argument("--test-count", type=int, default=5)
     args = parser.parse_args()
     shards = [
         path.name
         for path in sorted(args.dataset.glob("shard_*"))
         if (path / "_SUCCESS").is_file()
     ]
-    if len(shards) != 50:
-        raise RuntimeError(f"expected 50 successful shards, found {len(shards)}")
+    expected = args.train_count + args.validation_count + args.test_count
+    if len(shards) != expected:
+        raise RuntimeError(f"expected {expected} successful shards, found {len(shards)}")
     random.Random(args.seed).shuffle(shards)
     split = {
         "seed": args.seed,
         "grouping": "capture shard (one deterministic generator seed per shard)",
         "warning": "all groups share one fixed scene; this prevents shard/seed leakage but cannot test scene generalization",
-        "train": sorted(shards[:40]),
-        "validation": sorted(shards[40:45]),
-        "test": sorted(shards[45:]),
+        "train": sorted(shards[: args.train_count]),
+        "validation": sorted(shards[args.train_count : args.train_count + args.validation_count]),
+        "test": sorted(shards[args.train_count + args.validation_count :]),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(split, indent=2) + "\n")
