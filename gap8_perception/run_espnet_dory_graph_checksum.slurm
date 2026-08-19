@@ -22,7 +22,9 @@ declare -A BYTES=(
   [encoder]=51200 [corner_head]=6400 [gate_head]=1600 [danger_head]=100
 )
 
-cd /home/cchen/dory
+SCRATCH=$(mktemp -d "/tmp/espnet-dory-${GRAPH}-${SLURM_JOB_ID}-XXXXXX")
+trap 'rm -rf "$SCRATCH"' EXIT
+cd "$SCRATCH"
 PYTHONPATH=/home/cchen/dory /home/cchen/miniconda3/envs/dory/bin/python \
   "$REPO/gap8_perception/validate_dory_frontend.py" \
   --onnx "$OUTPUT/integer/$GRAPH/${GRAPH}_int.onnx" \
@@ -45,5 +47,5 @@ cd "$OUTPUT/${GRAPH}_gap8_application"
 make clean
 make all run platform=gvsoc CORE=7 DORY_CHECKSUM_HARNESS=1 \
   2>&1 | tee "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
-grep -q 'Checking final layer: Checksum OK' \
-  "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
+! grep -q 'Checksum Failed' "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
+grep -q 'Checking layer: Checksum OK' "$OUTPUT/${GRAPH}_gvsoc_checksum.log"

@@ -17,7 +17,8 @@ NETWORK_NAME=${NETWORK_NAME:-gap8-espnet-dory-student-v1}
 GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 
 for graph in encoder corner_head gate_head danger_head; do
-  grep -q 'Checking final layer: Checksum OK' \
+  ! grep -q 'Checksum Failed' "$OUTPUT/${graph}_gvsoc_checksum.log"
+  grep -q 'Checking layer: Checksum OK' \
     "$OUTPUT/${graph}_gvsoc_checksum.log"
 done
 
