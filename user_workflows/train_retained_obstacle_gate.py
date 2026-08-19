@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from gap8_perception.data import MultiTaskDataset
 from gap8_perception.audit_real_flights import canonical_image_order
@@ -230,15 +230,28 @@ def main():
     p=argparse.ArgumentParser()
     for name in ("obstacle-dataset","gate-dataset","gate-targets","gate-split-file","no-gate-dataset","real-root","obstacle-checkpoint","gate-checkpoint","output"):
         p.add_argument(f"--{name}",type=Path,required=True)
+    p.add_argument("--paired-no-gate-dataset",type=Path)
+    p.add_argument("--initial-mixed-checkpoint",type=Path)
     p.add_argument("--epochs",type=int,default=20); p.add_argument("--workers",type=int,default=8); p.add_argument("--seed",type=int,default=20260819)
     p.add_argument("--obstacle-batch-size",type=int,default=32); p.add_argument("--gate-batch-size",type=int,default=64)
     p.add_argument("--encoder-learning-rate",type=float,default=5e-5); p.add_argument("--obstacle-learning-rate",type=float,default=1e-4); p.add_argument("--gate-learning-rate",type=float,default=3e-4); p.add_argument("--obstacle-weight",type=float,default=5.0)
+    p.add_argument("--minimum-unsafe-recall",type=float,default=0.0)
+    p.add_argument("--minimum-collision-ap",type=float,default=0.0)
+    p.add_argument("--maximum-real-corner-error",type=float,default=float("inf"))
+    p.add_argument("--maximum-no-gate-fpr",type=float,default=1.0)
+    p.add_argument("--save-every-epoch",action="store_true")
     a=p.parse_args(); a.output.mkdir(parents=True,exist_ok=False); random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed); device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     camera=json.load(open(a.obstacle_dataset/"dataset_manifest.json"))["camera_calibration"]
     model=RetainedObstacleGateModel(a.obstacle_checkpoint,a.gate_checkpoint,camera).to(device)
+    if a.initial_mixed_checkpoint:
+        initial=torch.load(a.initial_mixed_checkpoint,map_location=device,weights_only=False)
+        model.load_state_dict(initial["model"],strict=True)
     temporal={s:TemporalHorizonDataset(a.obstacle_dataset,s,2,augment=s=="train",minimum_current_index=2) for s in ("train","validation","test")}
     synthetic={s:MultiTaskDataset(a.gate_dataset,a.gate_targets,a.gate_split_file,s) for s in ("train","validation","test")}
     negative={"train":NoGateDataset(a.no_gate_dataset,(0,1,2)),"validation":NoGateDataset(a.no_gate_dataset,(3,)),"test":NoGateDataset(a.no_gate_dataset,(4,))}
+    if a.paired_no_gate_dataset:
+        paired_indices={"train":range(16),"validation":range(16,18),"test":range(18,20)}
+        negative={split:ConcatDataset((dataset,NoGateDataset(a.paired_no_gate_dataset,paired_indices[split]))) for split,dataset in negative.items()}
     real={"train":RealGateDataset(a.real_root,("flight_06",)),"validation":RealGateDataset(a.real_root,("flight_07",)),"test":RealGateDataset(a.real_root,("flight_08",))}
     def loader(ds,batch,shuffle): return DataLoader(ds,batch,shuffle=shuffle,num_workers=a.workers,pin_memory=True,persistent_workers=a.workers>0)
     train_loaders={"obstacle":loader(temporal["train"],a.obstacle_batch_size,True),"synthetic":loader(synthetic["train"],a.gate_batch_size,True),"negative":loader(negative["train"],a.gate_batch_size,True),"real":loader(real["train"],a.gate_batch_size,True)}
@@ -252,17 +265,30 @@ def main():
     model.encoder.load_state_dict(model.gate_only_encoder_state)
     premix_validation=evaluate_obstacle(model,val_obstacle,device); premix_test=evaluate_obstacle(model,test_obstacle,device)
     model.encoder.load_state_dict(original_encoder)
+    if a.initial_mixed_checkpoint:
+        model.load_state_dict(initial["model"],strict=True)
     encoder_parameters=list(model.encoder.parameters()); encoder_ids={id(x) for x in encoder_parameters}
     gate_parameters=list(model.corner_adapter.parameters())+list(model.corner_head.parameters())+list(model.gate_adapter.parameters())+list(model.gate_head.parameters())+list(model.presence_head.parameters()); gate_ids={id(x) for x in gate_parameters}
     obstacle_parameters=[x for x in model.obstacle.parameters() if id(x) not in encoder_ids]
-    optimizer=torch.optim.AdamW([{"params":encoder_parameters,"lr":a.encoder_learning_rate},{"params":obstacle_parameters,"lr":a.obstacle_learning_rate},{"params":gate_parameters,"lr":a.gate_learning_rate}],weight_decay=1e-4); best=float("inf"); history=[]
+    optimizer=torch.optim.AdamW([{"params":encoder_parameters,"lr":a.encoder_learning_rate},{"params":obstacle_parameters,"lr":a.obstacle_learning_rate},{"params":gate_parameters,"lr":a.gate_learning_rate}],weight_decay=1e-4); best_key=None; history=[]
     for epoch in range(1,a.epochs+1):
         train=train_epoch(model,train_loaders,optimizer,device,a.obstacle_weight); obstacle_val=evaluate_obstacle(model,val_obstacle,device); gate_val=evaluate_gate(model,*val_gate,device)
         score=obstacle_val["loss"]+gate_val["synthetic_corner_mean_px"]/10+(1-gate_val["synthetic_gate_iou"])+gate_val["presence_bce"]
-        record={"epoch":epoch,"train":train,"obstacle_validation":obstacle_val,"gate_validation":gate_val,"selection_score":score}; history.append(record); print(json.dumps(record),flush=True)
+        violations={
+            "unsafe_recall":max(0.0,a.minimum_unsafe_recall-obstacle_val["unsafe_clearance_recall"]),
+            "collision_ap":max(0.0,a.minimum_collision_ap-obstacle_val["collision_ap"]),
+            "real_corner":max(0.0,gate_val["real_corner_mean_px"]-a.maximum_real_corner_error),
+            "no_gate_fpr":max(0.0,gate_val["explicit_no_gate_false_positive_rate"]-a.maximum_no_gate_fpr),
+        }
+        feasible=not any(violations.values())
+        violation_score=(violations["unsafe_recall"]+violations["collision_ap"]+
+                         violations["real_corner"]/max(1.0,a.maximum_real_corner_error)+violations["no_gate_fpr"])
+        selection_key=(0 if feasible else 1,score if feasible else violation_score,score)
+        record={"epoch":epoch,"train":train,"obstacle_validation":obstacle_val,"gate_validation":gate_val,"selection_score":score,"selection_feasible":feasible,"constraint_violations":violations}; history.append(record); print(json.dumps(record),flush=True)
         state={"epoch":epoch,"model":model.state_dict(),"optimizer":optimizer.state_dict(),"record":record}
         torch.save(state,a.output/"last.pt")
-        if score<best: best=score; torch.save(state,a.output/"best.pt")
+        if a.save_every_epoch: torch.save(state,a.output/f"epoch_{epoch:03d}.pt")
+        if best_key is None or selection_key<best_key: best_key=selection_key; torch.save(state,a.output/"best.pt")
     saved=torch.load(a.output/"best.pt",map_location=device,weights_only=False); model.load_state_dict(saved["model"])
     final={"best_epoch":saved["epoch"],"original_obstacle_validation":original_validation,"original_obstacle_test":original_test,
            "gate_only_finetuned_obstacle_validation":premix_validation,"gate_only_finetuned_obstacle_test":premix_test,
@@ -270,7 +296,10 @@ def main():
            "mixed_gate_validation":evaluate_gate(model,*val_gate,device),"mixed_gate_test":evaluate_gate(model,*test_gate,device),
            "real_split":{"train":["flight_06"],"validation":["flight_07"],"test":["flight_08"]},"history":history,
            "confidence":"sigmoid(presence_logit), trained with binary cross entropy","threshold":0.5,
-           "optimization":{"obstacle_weight":a.obstacle_weight,"encoder_learning_rate":a.encoder_learning_rate,"obstacle_learning_rate":a.obstacle_learning_rate,"gate_learning_rate":a.gate_learning_rate}}
+           "optimization":{"obstacle_weight":a.obstacle_weight,"encoder_learning_rate":a.encoder_learning_rate,"obstacle_learning_rate":a.obstacle_learning_rate,"gate_learning_rate":a.gate_learning_rate},
+           "selection_constraints":{"minimum_unsafe_recall":a.minimum_unsafe_recall,"minimum_collision_ap":a.minimum_collision_ap,"maximum_real_corner_error":a.maximum_real_corner_error,"maximum_no_gate_fpr":a.maximum_no_gate_fpr},
+           "paired_no_gate_dataset":str(a.paired_no_gate_dataset) if a.paired_no_gate_dataset else None,
+           "initial_mixed_checkpoint":str(a.initial_mixed_checkpoint) if a.initial_mixed_checkpoint else None}
     (a.output/"summary.json").write_text(json.dumps(final,indent=2)+"\n"); print(json.dumps(final),flush=True)
 
 

@@ -88,6 +88,15 @@ def parse_args():
         help="Omit all gate geometry and sample only obstacle/background views.",
     )
     parser.add_argument(
+        "--counterfactual-gate-camera-policy",
+        action="store_true",
+        help=(
+            "With --no-gates, retain the gate-scene camera sampling policy. "
+            "Using the same seed then produces paired images that differ only "
+            "by the omitted gate geometry."
+        ),
+    )
+    parser.add_argument(
         "--layout-family",
         choices=("fixed_v1", "multi_course_v2"),
         default="multi_course_v2",
@@ -113,6 +122,8 @@ if args.clutter_texture_manifest is not None:
     args.clutter_texture_manifest = args.clutter_texture_manifest.expanduser().resolve()
 if not 0.0 <= args.gate_target_probability <= 1.0:
     raise ValueError("gate target probability must be in [0, 1]")
+if args.counterfactual_gate_camera_policy and not args.no_gates:
+    raise ValueError("--counterfactual-gate-camera-policy requires --no-gates")
 if args.lighting_scale <= 0:
     raise ValueError("lighting scale must be positive")
 camera_calibration = json.loads(args.camera_calibration.read_text())
@@ -786,7 +797,7 @@ def sample_camera(rng):
     # Aim primarily at course features so the physically small micro gates and
     # varied obstacles are well represented while retaining broad pose diversity.
     obstacle_points = [item["center"] for item in LAYOUT["obstacles"]]
-    if args.no_gates:
+    if args.no_gates and not args.counterfactual_gate_camera_policy:
         points = np.asarray(obstacle_points)
         point_index = int(rng.integers(0, len(points)))
         targets_gate = False
@@ -921,6 +932,7 @@ def main():
                 "lighting_intensity_scale": args.lighting_scale,
                 "gate_target_probability": args.gate_target_probability,
                 "no_gates": args.no_gates,
+                "counterfactual_gate_camera_policy": args.counterfactual_gate_camera_policy,
                 "gate_view_sampling": {
                     "distance_m": [1.15, 2.0],
                     "maximum_horizontal_off_axis_degrees": 18,
