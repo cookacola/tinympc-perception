@@ -14,10 +14,12 @@ import numpy as np
 OVERSCAN_RESOLUTION = 512
 LIGHTING_PROFILES = (
     ("neutral", 120.0, 900.0, 5200.0),
-    ("dim", 55.0, 420.0, 4800.0),
+    # Keep the low-light profile visibly dim without producing near-black
+    # HM01B0 frames that would not be useful for gate or obstacle supervision.
+    ("dim", 90.0, 650.0, 4800.0),
     ("low_contrast", 240.0, 500.0, 5200.0),
     ("strong_shadow", 70.0, 1500.0, 5400.0),
-    ("warm", 110.0, 1050.0, 3400.0),
+    ("warm", 130.0, 1150.0, 3400.0),
     ("cool", 130.0, 1050.0, 7200.0),
     ("backlit", 80.0, 1350.0, 6200.0),
 )

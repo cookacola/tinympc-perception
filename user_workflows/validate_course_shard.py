@@ -14,6 +14,7 @@ parser.add_argument("--shard", type=Path, required=True)
 parser.add_argument("--expected", type=int, required=True)
 parser.add_argument("--allow-no-gates", action="store_true")
 args = parser.parse_args()
+MINIMUM_USEFUL_MEAN = 24.0
 
 
 def numbered(pattern):
@@ -48,7 +49,7 @@ for index, (rgb_path, depth_path, semantic_path) in enumerate(
         continue
     rgb_mean = float(rgb.mean())
     rgb_variance = float(rgb.var())
-    if rgb_mean <= 20 or rgb_variance <= 15:
+    if rgb_mean <= MINIMUM_USEFUL_MEAN or rgb_variance <= 15:
         errors.append(
             f"{index}: unusable RGB mean={rgb_mean:.2f} variance={rgb_variance:.2f}"
         )

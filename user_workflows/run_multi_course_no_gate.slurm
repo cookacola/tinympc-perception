@@ -37,7 +37,7 @@ for attempt in 1 2 3 4 5; do
   if timeout --signal=TERM --kill-after=20s 300s \
     python user_workflows/generate_course_shard.py \
       --output-dir "$partial" --frames "$FRAMES_PER_SHARD" --start-index "$start" \
-      --seed 20260819 --width 160 --height 160 --rt-subframes 1 \
+      --seed "$((20260819 + attempt - 1))" --width 160 --height 160 --rt-subframes 1 \
       --gate-texture-version photo_v1 --gate-target-probability 0 --no-gates \
       --layout-family multi_course_v2 --asset-split "$asset_split" \
       --clutter-texture-manifest "$TEXTURES" \
@@ -46,11 +46,10 @@ for attempt in 1 2 3 4 5; do
     generated=true
     break
   fi
-  echo "attempt $attempt failed for shard $start" >&2
+  echo "attempt $attempt failed for shard $start seed=$((20260819 + attempt - 1))" >&2
   if [[ -e "$partial" ]]; then find "$partial" -depth -delete; fi
 done
 if [[ "$generated" != true ]]; then echo "all attempts failed for shard $start" >&2; exit 77; fi
 python user_workflows/compact_course_shard.py --shard "$partial"
 touch "$partial/_SUCCESS"
 mv "$partial" "$final_dir"
-
