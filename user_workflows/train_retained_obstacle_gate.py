@@ -88,9 +88,13 @@ class RetainedObstacleGateModel(nn.Module):
         )
         self.obstacle.load_state_dict(obstacle["model"], strict=True)
         gate = torch.load(gate_checkpoint, map_location="cpu", weights_only=False)
-        encoder = {key.removeprefix("encoder."): value for key, value in gate["model"].items()
-                   if key.startswith("encoder.")}
-        self.obstacle.encoder.load_state_dict(encoder, strict=True)
+        # Keep the deployed obstacle encoder as the mixed-training start point.
+        # The gate-only encoder is retained solely for the explicit degradation
+        # audit performed before training.
+        self.gate_only_encoder_state = {
+            key.removeprefix("encoder."): value
+            for key, value in gate["model"].items() if key.startswith("encoder.")
+        }
         self.corner_adapter = ConvBNReLU(64, 32, 1)
         self.corner_head = nn.Sequential(DSConv(32, 16), nn.Conv2d(16, 4, 1))
         self.gate_adapter = ConvBNReLU(64, 32, 1)
@@ -134,20 +138,20 @@ def gate_losses(model, synthetic, real, negative, device):
     corner = weighted_corner_mse(output["corners"], synthetic["corners"].to(device), valid)
     mask = F.binary_cross_entropy_with_logits(output["gate"], target) + 0.5 * soft_dice_loss(output["gate"], target)
     present = target.flatten(1).any(1).float()
-    confidence = F.binary_cross_entropy_with_logits(output["presence_logit"], present)
+    negative_output = model.forward_gate(negative["image"].to(device, non_blocking=True))
+    confidence_logits = torch.cat((output["presence_logit"], negative_output["presence_logit"]))
+    confidence_labels = torch.cat((present, torch.zeros_like(negative_output["presence_logit"])))
+    confidence = F.binary_cross_entropy_with_logits(confidence_logits, confidence_labels)
     real_output = model.forward_gate(real["image"].to(device, non_blocking=True))
     real_corner = weighted_corner_mse(real_output["corners"], real["corners"].to(device),
                                        real["corner_valid"].to(device))
     real_presence = F.binary_cross_entropy_with_logits(real_output["presence_logit"],
                                                        torch.ones_like(real_output["presence_logit"]))
-    no_gate = model.forward_gate(negative["image"].to(device, non_blocking=True))
-    negative_mask = F.binary_cross_entropy_with_logits(no_gate["gate"], torch.zeros_like(no_gate["gate"]))
-    negative_presence = F.binary_cross_entropy_with_logits(no_gate["presence_logit"],
-                                                           torch.zeros_like(no_gate["presence_logit"]))
-    total = 10 * corner + mask + confidence + 5 * real_corner + real_presence + negative_mask + negative_presence
+    negative_mask = F.binary_cross_entropy_with_logits(negative_output["gate"], torch.zeros_like(negative_output["gate"]))
+    total = 10 * corner + mask + confidence + 5 * real_corner + 0.25 * real_presence + negative_mask
     return total, {"synthetic_corner": corner, "synthetic_mask": mask, "synthetic_presence": confidence,
                    "real_corner": real_corner, "real_presence": real_presence,
-                   "negative_mask": negative_mask, "negative_presence": negative_presence}
+                   "negative_mask": negative_mask}
 
 
 def infinite(loader):
@@ -236,9 +240,12 @@ def main():
     val_gate=[loader(synthetic["validation"],a.gate_batch_size,False),loader(negative["validation"],a.gate_batch_size,False),loader(real["validation"],a.gate_batch_size,False)]
     test_gate=[loader(synthetic["test"],a.gate_batch_size,False),loader(negative["test"],a.gate_batch_size,False),loader(real["test"],a.gate_batch_size,False)]
     original_state=torch.load(a.obstacle_checkpoint,map_location="cpu",weights_only=False)["model"]
-    current_state={k:v.cpu().clone() for k,v in model.obstacle.state_dict().items()}; model.obstacle.load_state_dict(original_state)
+    model.obstacle.load_state_dict(original_state)
     original_validation=evaluate_obstacle(model,val_obstacle,device); original_test=evaluate_obstacle(model,test_obstacle,device)
-    model.obstacle.load_state_dict(current_state); premix_validation=evaluate_obstacle(model,val_obstacle,device); premix_test=evaluate_obstacle(model,test_obstacle,device)
+    original_encoder={key:value.cpu().clone() for key,value in model.encoder.state_dict().items()}
+    model.encoder.load_state_dict(model.gate_only_encoder_state)
+    premix_validation=evaluate_obstacle(model,val_obstacle,device); premix_test=evaluate_obstacle(model,test_obstacle,device)
+    model.encoder.load_state_dict(original_encoder)
     encoder_parameters=list(model.encoder.parameters()); encoder_ids={id(x) for x in encoder_parameters}
     gate_parameters=list(model.corner_adapter.parameters())+list(model.corner_head.parameters())+list(model.gate_adapter.parameters())+list(model.gate_head.parameters())+list(model.presence_head.parameters()); gate_ids={id(x) for x in gate_parameters}
     obstacle_parameters=[x for x in model.obstacle.parameters() if id(x) not in encoder_ids]
