@@ -23,7 +23,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader
 
 ISAACSIM_REPO = Path("/home/cchen/isaacsim-workspace")
 sys.path.insert(0, str(ISAACSIM_REPO))
@@ -242,6 +242,18 @@ def make_loaders(arguments):
         "validation": NoGateDataset(arguments.no_gate_dataset, (3,)),
         "test": NoGateDataset(arguments.no_gate_dataset, (4,)),
     }
+    if arguments.paired_no_gate_dataset:
+        paired_indices = {
+            "train": range(16), "validation": range(16, 18),
+            "test": range(18, 20),
+        }
+        negative = {
+            split: ConcatDataset((
+                dataset,
+                NoGateDataset(arguments.paired_no_gate_dataset, paired_indices[split]),
+            ))
+            for split, dataset in negative.items()
+        }
     real = {
         "train": RealGateDataset(arguments.real_root, ("flight_06",)),
         "validation": RealGateDataset(arguments.real_root, ("flight_07",)),
@@ -275,6 +287,7 @@ def main():
     ):
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--paired-no-gate-dataset", type=Path)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260819)
     arguments = parser.parse_args()
