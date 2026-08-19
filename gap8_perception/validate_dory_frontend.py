@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
+
 from dory.Frontend_frameworks.NEMO.Parser import onnx_manager
 from dory.Hardware_targets.PULP.GAP8.HW_Parser import onnx_manager as gap8_backend
 from dory.Parsers.HW_node import HW_node
@@ -52,6 +54,19 @@ def main():
         "input_bits": 8,
         "input_signed": False,
     }
+    if args.bnrelu_bits == 64:
+        # The pinned GAP8 backend ships a genuine int64 BN/ReLU kernel and
+        # serializes k/lambda as int64 when BNRelu_bits=64.  The local NEMO
+        # frontend's safety check predates that backend and still rejects
+        # coefficients that exceed int32.  Widen only that representability
+        # predicate; arithmetic, ONNX multipliers, and golden fixtures remain
+        # unchanged.
+        import dory.Frontend_frameworks.NEMO.Pattern_rewriter as pattern_module
+
+        pattern_module._fits_int32 = lambda value: bool(
+            np.all(np.asarray(value) >= np.iinfo(np.int64).min)
+            and np.all(np.asarray(value) <= np.iinfo(np.int64).max)
+        )
     graph = onnx_manager(str(args.onnx), config, "gap8_").full_graph_parsing()
     frontend_node_names = [node.name for node in graph]
     backend_config = dict(config)
