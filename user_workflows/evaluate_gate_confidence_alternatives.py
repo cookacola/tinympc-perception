@@ -133,8 +133,16 @@ def collect(model, loader, device, domain: str) -> dict[str, np.ndarray]:
         output = model.forward_gate(batch["image"].to(device, non_blocking=True))
         values = batch_features(output)
         features.append(values)
-        labels.append(np.full(len(values), domain != "negative", dtype=np.int8))
-        domains.extend([domain] * len(values))
+        if domain == "synthetic":
+            visible = batch["gate"].flatten(1).any(1).numpy().astype(bool)
+            labels.append(visible.astype(np.int8))
+            domains.extend([
+                "synthetic_visible" if is_visible else "synthetic_absent"
+                for is_visible in visible
+            ])
+        else:
+            labels.append(np.full(len(values), domain != "negative", dtype=np.int8))
+            domains.extend([domain] * len(values))
         raw_sources = batch.get("source", [""] * len(values))
         sources.extend([str(source) for source in raw_sources])
     return {
@@ -172,10 +180,10 @@ def metrics(data: dict[str, np.ndarray], scores: np.ndarray, threshold: float) -
         "brier": float(brier_score_loss(labels, clipped)),
         "threshold": float(threshold),
     }
-    for domain in ("synthetic", "real", "negative"):
+    for domain in ("synthetic_visible", "synthetic_absent", "real", "negative"):
         chosen = domains == domain
         if chosen.any():
-            key = "false_positive_rate" if domain == "negative" else "recall"
+            key = "false_positive_rate" if domain in {"negative", "synthetic_absent"} else "recall"
             result[f"{domain}_{key}"] = float(prediction[chosen].mean())
             result[f"{domain}_mean_score"] = float(scores[chosen].mean())
             result[f"{domain}_examples"] = int(chosen.sum())
