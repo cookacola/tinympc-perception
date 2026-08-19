@@ -15,6 +15,7 @@ STUDENT=${STUDENT:-$WORKSPACE/espnet_dory_student_v2}
 OUTPUT=${OUTPUT:-$WORKSPACE/espnet_dory_student_v2_deployment}
 GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
+NETWORK_NAME=${NETWORK_NAME:-gap8-espnet-dory-student-v1}
 declare -A BYTES=(
   [encoder]=51200 [corner_head]=6400 [gate_head]=1600 [danger_head]=100
 )
@@ -48,7 +49,7 @@ for graph in encoder corner_head gate_head danger_head; do
     "$OUTPUT/${graph}_gvsoc_checksum.log"
 done
 
-PACKAGE="$NANOCOCKPIT/src/gap/examples/tiny-racer/app/networks/gap8-espnet-dory-student-v1"
+PACKAGE="$NANOCOCKPIT/src/gap/examples/tiny-racer/app/networks/$NETWORK_NAME"
 if [[ -e "$PACKAGE" ]]; then
   echo "Refusing to overwrite existing package: $PACKAGE" >&2
   exit 2
@@ -64,13 +65,13 @@ PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
   --integer-evaluation "$OUTPUT/integer_ground_truth.json" \
   --student-summary "$STUDENT/summary.json" \
   --destination "$NANOCOCKPIT/src/gap/examples/tiny-racer/app/networks" \
-  --name gap8-espnet-dory-student-v1
+  --name "$NETWORK_NAME"
 
 set +u
 source "$GAP_SDK/configs/ai_deck.sh"
 set -u
 cd "$NANOCOCKPIT/src/gap/examples/tiny-racer"
-make clean NETWORK_NAME=gap8-espnet-dory-student-v1
-make build NETWORK_NAME=gap8-espnet-dory-student-v1 \
+make clean NETWORK_NAME="$NETWORK_NAME"
+make build NETWORK_NAME="$NETWORK_NAME" \
   2>&1 | tee "$OUTPUT/nanocockpit_firmware_build.log"
 test -x BUILD/GAP8_V2/GCC_RISCV/pulp_frontnet
