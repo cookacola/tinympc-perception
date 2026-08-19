@@ -47,21 +47,35 @@ for (( shard_index=SLURM_ARRAY_TASK_ID; shard_index<num_shards; shard_index+=ARR
     echo "refusing to overwrite incomplete shard: $final_dir" >&2
     exit 2
   fi
-  partial=$(printf '%s/.partial/shard_%09d_job_%s_task_%s' \
-    "$OUTPUT_ROOT" "$start" "$SLURM_JOB_ID" "$SLURM_ARRAY_TASK_ID")
-  if [[ -e "$partial" ]]; then
-    echo "refusing to overwrite partial shard: $partial" >&2
-    exit 2
-  fi
-
   cd "$SOURCE_DIR"
-  "$PYTHON" user_workflows/generate_course_shard.py \
-    --output-dir "$partial" --frames "$frames" --start-index "$start" \
-    --seed "$BASE_SEED" --width 160 --height 160 --rt-subframes 1 \
-    --gate-texture-version photo_v1 --gate-target-probability 0.9 \
-    --camera-calibration gap8_perception/configs/hm01b0_calibration.json
-  "$PYTHON" user_workflows/validate_course_shard.py \
-    --shard "$partial" --expected "$frames"
+  generated=false
+  for attempt in 1 2 3 4 5; do
+    partial=$(printf '%s/.partial/shard_%09d_job_%s_task_%s_attempt_%s' \
+      "$OUTPUT_ROOT" "$start" "$SLURM_JOB_ID" "$SLURM_ARRAY_TASK_ID" "$attempt")
+    if [[ -e "$partial" ]]; then
+      find "$partial" -depth -delete
+    fi
+    echo "generate start=$start frames=$frames attempt=$attempt"
+    if timeout --signal=TERM --kill-after=20s 240s \
+      "$PYTHON" user_workflows/generate_course_shard.py \
+        --output-dir "$partial" --frames "$frames" --start-index "$start" \
+        --seed "$((BASE_SEED + attempt - 1))" --width 160 --height 160 --rt-subframes 1 \
+        --gate-texture-version photo_v1 --gate-target-probability 0.9 \
+        --camera-calibration gap8_perception/configs/hm01b0_calibration.json \
+      && "$PYTHON" user_workflows/validate_course_shard.py \
+        --shard "$partial" --expected "$frames"; then
+      generated=true
+      break
+    fi
+    echo "generation attempt $attempt failed or timed out" >&2
+    if [[ -e "$partial" ]]; then
+      find "$partial" -depth -delete
+    fi
+  done
+  if [[ "$generated" != true ]]; then
+    echo "all generation attempts failed for start=$start" >&2
+    exit 77
+  fi
   "$PYTHON" user_workflows/compact_course_shard.py --shard "$partial"
   touch "$partial/_SUCCESS"
   mv "$partial" "$final_dir"
