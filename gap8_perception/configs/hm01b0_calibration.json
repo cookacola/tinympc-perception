@@ -14,6 +14,22 @@
     -0.0060400120,
     -0.1900189875
   ],
+  "simulation_distortion_coefficients": [
+    -0.0176448766,
+    0.0994132451,
+    0.0054432154,
+    -0.0060400120,
+    -0.055
+  ],
+  "simulation_distortion_note": "The measured k3 polynomial folds at normalized radius 1.018, inside the 160x160 frame. The constrained simulation k3 remains monotonic through the farthest corner while preserving k1, k2, p1, and p2.",
+  "sensor_settings": {
+    "frame_rate_hz": 30.0,
+    "integration_time_ms": 10.0,
+    "auto_exposure": false,
+    "analog_gain": 2.0,
+    "digital_gain": 1.0,
+    "readout": "HM01B0 half mode cropped to 160x160"
+  },
   "average_reprojection_error_px": 0.1573255917,
   "source": "user-provided calibration"
 }

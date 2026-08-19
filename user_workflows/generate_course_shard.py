@@ -8,7 +8,19 @@ import os
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
+
+OVERSCAN_RESOLUTION = 512
+LIGHTING_PROFILES = (
+    ("neutral", 120.0, 900.0, 5200.0),
+    ("dim", 55.0, 420.0, 4800.0),
+    ("low_contrast", 240.0, 500.0, 5200.0),
+    ("strong_shadow", 70.0, 1500.0, 5400.0),
+    ("warm", 110.0, 1050.0, 3400.0),
+    ("cool", 130.0, 1050.0, 7200.0),
+    ("backlit", 80.0, 1350.0, 6200.0),
+)
 
 
 def parse_args():
@@ -70,12 +82,6 @@ import omni.kit.app
 import omni.replicator.core as rep
 import omni.usd
 from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdShade, Vt
-
-extension_manager = omni.kit.app.get_app().get_extension_manager()
-if not extension_manager.set_extension_enabled_immediate(
-    "isaacsim.sensors.experimental.rtx", True
-):
-    raise RuntimeError("failed to enable RTX sensor/lens-distortion schemas")
 
 CLASS_NAMES = ["background", "course", "boundary", "obstacle", "gate", "lab_clutter"]
 ASSET_ROOT = Path(__file__).resolve().parents[1] / "gates"
@@ -274,10 +280,16 @@ def build_scene():
 
     rep.functional.create.xform(name="World")
     rep.functional.create.xform(parent="/World", name="Course")
-    rep.functional.create.dome_light(intensity=120, parent="/World", name="DomeLight")
+    dome = UsdLux.DomeLight.Define(stage, "/World/DomeLight")
+    dome.CreateIntensityAttr(120.0)
     sun = UsdLux.DistantLight.Define(stage, "/World/Sun")
     sun.CreateIntensityAttr(900.0)
     sun.CreateAngleAttr(1.0)
+    sun.CreateEnableColorTemperatureAttr(True)
+    sun.CreateColorTemperatureAttr(5200.0)
+    sun_xform = UsdGeom.Xformable(sun.GetPrim())
+    sun_rotate_x = sun_xform.AddRotateXOp()
+    sun_rotate_z = sun_xform.AddRotateZOp()
 
     # Lab floor plus one fixed, approximately 4 m x 4 m wooden-tile course.
     create_box(
@@ -453,39 +465,63 @@ def build_scene():
     camera = rep.functional.create.camera(
         position=(0, -12, 4), look_at=(0, 0, 0), parent="/World", name="Camera"
     )
-    if not camera.ApplyAPI("OmniLensDistortionOpenCvPinholeAPI"):
-        raise RuntimeError("OpenCV pinhole lens schema is unavailable")
-    camera.GetAttribute("omni:lensdistortion:model").Set("opencvPinhole")
     intrinsic = camera_calibration["camera_matrix"]
-    distortion = camera_calibration["distortion_coefficients"]
-    pinhole_values = {
-        "fx": intrinsic[0][0],
-        "fy": intrinsic[1][1],
-        "cx": intrinsic[0][2],
-        "cy": intrinsic[1][2],
-        "k1": distortion[0],
-        "k2": distortion[1],
-        "p1": distortion[2],
-        "p2": distortion[3],
-        "k3": distortion[4],
-    }
-    camera.GetAttribute(
-        "omni:lensdistortion:opencvPinhole:imageSize"
-    ).Set(Gf.Vec2i(args.width, args.height))
-    for attribute, value in pinhole_values.items():
-        usd_attribute = camera.GetAttribute(
-            f"omni:lensdistortion:opencvPinhole:{attribute}"
-        )
-        if not usd_attribute:
-            raise RuntimeError(f"missing OpenCV pinhole attribute: {attribute}")
-        usd_attribute.Set(float(value))
+    usd_camera = UsdGeom.Camera(camera)
+    aperture = 20.955
+    focal_length = float(intrinsic[0][0] * aperture / OVERSCAN_RESOLUTION)
+    usd_camera.CreateHorizontalApertureAttr(aperture)
+    usd_camera.CreateVerticalApertureAttr(
+        float(focal_length * OVERSCAN_RESOLUTION / intrinsic[1][1])
+    )
+    usd_camera.CreateFocalLengthAttr(focal_length)
+    camera.CreateAttribute("omni:rtx:autoExposure:enabled", Sdf.ValueTypeNames.Bool).Set(False)
+    camera.CreateAttribute("exposure:time", Sdf.ValueTypeNames.Float).Set(0.010)
+    camera.CreateAttribute("exposure:iso", Sdf.ValueTypeNames.Float).Set(200.0)
     camera_xform = UsdGeom.Xformable(camera)
     camera_xform.ClearXformOpOrder()
     camera_matrix = camera_xform.MakeMatrixXform()
     render_product = rep.create.render_product(
-        camera, (args.width, args.height), name="CourseRenderProduct"
+        camera, (OVERSCAN_RESOLUTION, OVERSCAN_RESOLUTION), name="CourseRenderProduct"
     )
-    return camera_matrix, render_product
+    return camera_matrix, render_product, dome, sun, sun_rotate_x, sun_rotate_z
+
+
+def distortion_remap():
+    intrinsic = np.asarray(camera_calibration["camera_matrix"], np.float64)
+    distortion = np.asarray(
+        camera_calibration.get("simulation_distortion_coefficients",
+                               camera_calibration["distortion_coefficients"]),
+        np.float64,
+    )
+    u, v = np.meshgrid(np.arange(args.width, dtype=np.float64),
+                       np.arange(args.height, dtype=np.float64))
+    pixels = np.stack((u, v), axis=-1).reshape(-1, 1, 2)
+    ideal = cv2.undistortPointsIter(
+        pixels, intrinsic, distortion, None, None,
+        (cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, 50, 1e-12),
+    ).reshape(args.height, args.width, 2)
+    return ((ideal[..., 0] * intrinsic[0, 0] + OVERSCAN_RESOLUTION / 2).astype(np.float32),
+            (ideal[..., 1] * intrinsic[1, 1] + OVERSCAN_RESOLUTION / 2).astype(np.float32))
+
+
+def apply_sensor_model(output_dir, seed):
+    """Calibrated pinhole remap followed by deterministic HM01B0-like sampling."""
+    map_x, map_y = distortion_remap()
+    rng = np.random.default_rng(seed)
+    for source in sorted(output_dir.glob("rgb_*.png")):
+        image = cv2.imread(str(source), cv2.IMREAD_COLOR)
+        warped = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR)
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+        response = np.clip(0.04 + 0.96 * np.power(gray, 1.15), 0.0, 1.0)
+        noise = rng.normal(0.0, np.sqrt(10.0 + 45.0 * response), response.shape)
+        sampled = np.clip(np.rint(response * 255.0 + noise), 0, 255).astype(np.uint8)
+        cv2.imwrite(str(source), cv2.cvtColor(sampled, cv2.COLOR_GRAY2BGR))
+    for source in sorted(output_dir.glob("distance_to_image_plane_*.npy")):
+        depth = np.load(source, allow_pickle=False)
+        np.save(source, cv2.remap(depth, map_x, map_y, cv2.INTER_NEAREST), allow_pickle=False)
+    for source in sorted(output_dir.glob("semantic_segmentation_*.png")):
+        semantic = cv2.imread(str(source), cv2.IMREAD_UNCHANGED)
+        cv2.imwrite(str(source), cv2.remap(semantic, map_x, map_y, cv2.INTER_NEAREST))
 
 
 def sample_camera(rng):
@@ -532,7 +568,7 @@ def sample_camera(rng):
 
 
 def main():
-    camera_matrix, render_product = build_scene()
+    camera_matrix, render_product, dome, sun, sun_rotate_x, sun_rotate_z = build_scene()
     backend = rep.backends.get("DiskBackend")
     backend.initialize(output_dir=str(args.output_dir))
     (args.output_dir / "scene_metadata.json").write_text(
@@ -572,7 +608,9 @@ def main():
                     else "fixed box rails"
                 ),
                 "outside_context": ["tables", "computers", "shelves"],
-                "randomized": ["camera_position", "camera_look_at"],
+                "randomized": ["camera_position", "camera_look_at", "lighting_profile",
+                               "light_intensity", "light_temperature", "light_direction"],
+                "lighting_profiles": [profile[0] for profile in LIGHTING_PROFILES],
                 "gate_target_probability": args.gate_target_probability,
                 "gate_view_sampling": {
                     "distance_m": [1.15, 2.0],
@@ -606,6 +644,14 @@ def main():
     records = []
     for local_index in range(args.frames):
         eye, target = sample_camera(rng)
+        profile_name, dome_base, sun_base, temperature = LIGHTING_PROFILES[
+            local_index % len(LIGHTING_PROFILES)
+        ]
+        dome.GetIntensityAttr().Set(float(dome_base * rng.uniform(0.85, 1.15)))
+        sun.GetIntensityAttr().Set(float(sun_base * rng.uniform(0.85, 1.15)))
+        sun.GetColorTemperatureAttr().Set(float(temperature + rng.uniform(-250.0, 250.0)))
+        sun_rotate_x.Set(float(rng.uniform(25.0, 70.0)))
+        sun_rotate_z.Set(float(rng.uniform(0.0, 360.0)))
         camera_matrix.Set(look_at_matrix(eye, target))
         rep.orchestrator.step(rt_subframes=args.rt_subframes, delta_time=0.0)
         records.append(
@@ -618,12 +664,14 @@ def main():
                     "resolution": [args.width, args.height],
                     "depth_unit": "meter",
                     "semantic_classes": CLASS_NAMES,
+                    "lighting_profile": profile_name,
                 }
             )
         )
     rep.orchestrator.wait_until_complete()
     writer.detach()
     manifest_path.write_text("\n".join(records) + "\n")
+    apply_sensor_model(args.output_dir, args.seed + args.start_index + 1771)
 
 
 try:
