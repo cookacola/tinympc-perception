@@ -192,10 +192,10 @@ def main():
             r"Layers_name\[i\], i\);\n)"
             r"(\s+if \(i == \d+\)\n\s+checksum\([^;]+;\n)"
             r"(#endif)",
-            r'\1\n#ifdef DORY_CHECKSUM_HARNESS\n'
+            r'\1\3\n#ifdef DORY_CHECKSUM_HARNESS\n'
             r'    checksum("layer", L2_output, activations_out_size[i], '
             r'activations_out_checksum[i][exec]);\n'
-            r'#endif\n\3',
+            r'#endif',
             bounded,
         )
         network_source.write_text(bounded)

@@ -15,8 +15,20 @@ case "$GRAPH" in
 esac
 
 OUTPUT=${OUTPUT:-/home/cchen/isaacsim-workspace/workspace/espnet_dory_student_v2_deployment}
+REPO=/home/cchen/gap8-drone-racing-perception
 GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
+declare -A BYTES=(
+  [encoder]=51200 [corner_head]=6400 [gate_head]=1600 [danger_head]=100
+)
+
+cd /home/cchen/dory
+PYTHONPATH=/home/cchen/dory /home/cchen/miniconda3/envs/dory/bin/python \
+  "$REPO/gap8_perception/validate_dory_frontend.py" \
+  --onnx "$OUTPUT/integer/$GRAPH/${GRAPH}_int.onnx" \
+  --output "$OUTPUT/${GRAPH}_dory_report.json" \
+  --app-dir "$OUTPUT/${GRAPH}_gap8_application" \
+  --expected-output-bytes "${BYTES[$GRAPH]}"
 
 source /home/cchen/miniconda3/etc/profile.d/conda.sh
 conda activate frontnet
