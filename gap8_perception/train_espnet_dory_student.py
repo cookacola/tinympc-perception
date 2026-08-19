@@ -150,7 +150,7 @@ def train_epoch(model, teacher, loaders, optimizer, device):
 
 
 @torch.no_grad()
-def evaluate_obstacle(model, teacher, loader, device):
+def obstacle_raw_predictions(model, teacher, loader, device):
     model.eval()
     labels, scores = [], []
     intersection = union = 0
@@ -165,17 +165,45 @@ def evaluate_obstacle(model, teacher, loader, device):
         frame_score = (prediction * corridor).flatten(1).amax(1)
         labels.extend(batch["collision"].bool().tolist())
         scores.extend(frame_score.cpu().tolist())
-    labels_np, scores_np = np.asarray(labels, bool), np.asarray(scores)
-    prediction = scores_np >= 0.5
+    return np.asarray(labels, bool), np.asarray(scores), intersection, union
+
+
+def obstacle_report(raw, threshold):
+    labels_np, scores_np, intersection, union = raw
+    prediction = scores_np >= threshold
     recall = float(prediction[labels_np].mean()) if labels_np.any() else float("nan")
     return {
         "danger_iou": intersection / max(1, union),
         "collision_auroc": auc(labels_np, scores_np),
         "collision_ap": average_precision(labels_np, scores_np),
-        "collision_recall_at_0_5": recall,
+        "collision_recall": recall,
+        "collision_threshold": float(threshold),
         "collision_positive_count": int(labels_np.sum()),
         "examples": len(labels_np),
     }
+
+
+def select_collision_threshold(model, teacher, loader, device, minimum_recall=0.95):
+    raw = obstacle_raw_predictions(model, teacher, loader, device)
+    candidates = np.linspace(0.01, 0.99, 99)
+    reports = [
+        obstacle_report(raw, float(threshold))
+        for threshold in candidates
+    ]
+    feasible = [report for report in reports if report["collision_recall"] >= minimum_recall]
+    return max(feasible or reports, key=lambda report: report["collision_threshold"])[
+        "collision_threshold"
+    ]
+
+
+def evaluate_obstacle(model, teacher, loader, device, threshold=0.5):
+    report = obstacle_report(
+        obstacle_raw_predictions(model, teacher, loader, device), threshold
+    )
+    # Retain the original fixed-threshold field for checkpoint-selection compatibility.
+    if threshold == 0.5:
+        report["collision_recall_at_0_5"] = report["collision_recall"]
+    return report
 
 
 @torch.no_grad()
@@ -333,13 +361,22 @@ def main():
 
     selected = torch.load(args.output / "best.pt", map_location=device, weights_only=False)
     model.load_state_dict(selected["model"])
+    selected_danger_threshold = select_collision_threshold(
+        model, teacher, validation[0], device
+    )
     summary = {
         "selected_epoch": selected["epoch"],
         "architecture": "ESPNetDoryStudent",
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "teacher": str(args.teacher_checkpoint),
         "history": history,
-        "obstacle_test": evaluate_obstacle(model, teacher, test[0], device),
+        "selected_danger_threshold": selected_danger_threshold,
+        "obstacle_validation_at_selected_threshold": evaluate_obstacle(
+            model, teacher, validation[0], device, selected_danger_threshold
+        ),
+        "obstacle_test": evaluate_obstacle(
+            model, teacher, test[0], device, selected_danger_threshold
+        ),
         "gate_test": evaluate_gate(model, *test[1:], device),
         "real_split": {"train": "flight_06", "validation": "flight_07", "test": "flight_08"},
     }
