@@ -1,0 +1,35 @@
+{
+  "format": "tinympc-espnet-dory-float-student-metrics-v1",
+  "checkpoint": "model/espnet_dory_student_epoch15.pt",
+  "checkpoint_sha256": "7134a7a358fed932033765f8f25a44130b2a718553c38ce24ba6c2b939a34d5a",
+  "checkpoint_bytes": 505465,
+  "architecture": "ESPNetDoryStudent",
+  "epoch": 15,
+  "parameters": 103990,
+  "input": {
+    "shape_chw": [2, 160, 160],
+    "dtype": "float32",
+    "range": [0.0, 1.0],
+    "channel_order": ["previous", "current"]
+  },
+  "obstacle_test": {
+    "examples": 3814,
+    "collision_positive_count": 358,
+    "danger_iou": 0.5461521691737519,
+    "collision_auroc": 0.9401009336850817,
+    "collision_ap": 0.6809239602466918,
+    "collision_recall": 0.9720670391061452,
+    "collision_threshold": 0.33
+  },
+  "gate_test": {
+    "synthetic_examples": 2000,
+    "negative_examples": 3000,
+    "real_examples": 3603,
+    "gate_iou": 0.591324491150755,
+    "synthetic_corner_mean_px": 5.8495049476623535,
+    "synthetic_corner_p95_px": 42.24416732788086,
+    "real_corner_mean_px": 24.690998077392578,
+    "real_corner_p95_px": 94.52545166015625,
+    "negative_mask_pixel_rate": 0.00040666666666666667
+  }
+}

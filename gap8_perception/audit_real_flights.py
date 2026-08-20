@@ -86,6 +86,27 @@ def combined_order_audit(root: Path, authoritative: dict[tuple[str, str], np.nda
     }
 
 
+def mocap_speed_summary(samples: np.ndarray) -> dict:
+    """Summarize translational speed while rejecting timestamp discontinuities."""
+    delta_t = np.diff(samples[:, 0])
+    valid = (delta_t >= 0.001) & (delta_t <= 0.2)
+    distance = np.linalg.norm(np.diff(samples[:, 1:4], axis=0), axis=1)
+    speed = distance[valid] / delta_t[valid]
+    return {
+        "samples": int(speed.size),
+        "median_m_per_s": float(np.median(speed)),
+        "p95_m_per_s": float(np.percentile(speed, 95)),
+        "p99_m_per_s": float(np.percentile(speed, 99)),
+        "maximum_m_per_s": float(np.max(speed)),
+        "fraction_at_or_above_1_m_per_s": float(np.mean(speed >= 1.0)),
+        "fraction_at_or_above_2_m_per_s": float(np.mean(speed >= 2.0)),
+        "interpretation": (
+            "finite-difference mocap diagnostic, not proof of closed-loop "
+            "model operation or sustained racing speed"
+        ),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -130,10 +151,19 @@ def main():
         ]
         image_times = load_image_times(folder / "stream_out" / "image_times.csv")
         with (folder / f"{flight}.csv").open(newline="") as stream:
-            mocap_times = np.asarray(
-                [float(row["timestamp"]) for row in csv.DictReader(stream)],
+            mocap = np.asarray(
+                [
+                    [
+                        float(row["timestamp"]),
+                        float(row["drone_px"]),
+                        float(row["drone_py"]),
+                        float(row["drone_pz"]),
+                    ]
+                    for row in csv.DictReader(stream)
+                ],
                 np.float64,
             )
+        mocap_times = mocap[:, 0]
         image_count = len(list((folder / "stream_out").glob("img_*.png")))
         topology_ok = 0
         raw_to_canonical = Counter()
@@ -162,6 +192,7 @@ def main():
             "labeled_positive_frames": len(labels),
             "unlabeled_frames": image_count - len(labels),
             "negative_labeled_frames": 0,
+            "recorded_mocap_speed": mocap_speed_summary(mocap),
             "corner_topology_valid_fraction": topology_ok / len(labels),
             "raw_to_image_TL_TR_BR_BL_permutation_counts": dict(raw_to_canonical),
             "nearest_mocap_timestamp_ms": {

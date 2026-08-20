@@ -1,0 +1,81 @@
+{
+  "checkpoint": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1/best_total.pt",
+  "input_crop_sensor_rows": [
+    20,
+    140
+  ],
+  "dataset_scope": "gate-only; no real danger claim",
+  "flights": {
+    "flight_06": {
+      "frames": 4438,
+      "detection_rate": 0.9959441189725101,
+      "raw_vs_noisy_label": {
+        "mean_px": 4.936501979827881,
+        "median_px": 2.2449069023132324,
+        "p95_px": 23.213869094848633,
+        "pck_4px": 0.8521856692203695,
+        "pck_8px": 0.903560162235241
+      },
+      "tolerance_adjusted_upper_bound": {
+        "label_tolerance_px": 3.25,
+        "mean_excess_px": 2.645709753036499,
+        "p95_excess_px": 19.963869094848633,
+        "note": "subtracts the independently audited label-to-edge tolerance; not a replacement for manually corrected ground truth"
+      }
+    },
+    "flight_07": {
+      "frames": 3833,
+      "detection_rate": 0.9801721888859901,
+      "raw_vs_noisy_label": {
+        "mean_px": 9.447876930236816,
+        "median_px": 4.016733169555664,
+        "p95_px": 35.74097442626953,
+        "pck_4px": 0.49647795460474825,
+        "pck_8px": 0.7417166710148708
+      },
+      "tolerance_adjusted_upper_bound": {
+        "label_tolerance_px": 3.25,
+        "mean_excess_px": 6.385640621185303,
+        "p95_excess_px": 32.49097442626953,
+        "note": "subtracts the independently audited label-to-edge tolerance; not a replacement for manually corrected ground truth"
+      }
+    },
+    "flight_08": {
+      "frames": 3045,
+      "detection_rate": 0.9274220032840722,
+      "raw_vs_noisy_label": {
+        "mean_px": 12.790894508361816,
+        "median_px": 6.261876106262207,
+        "p95_px": 38.43302917480469,
+        "pck_4px": 0.09852216748768473,
+        "pck_8px": 0.5802955665024631
+      },
+      "tolerance_adjusted_upper_bound": {
+        "label_tolerance_px": 3.25,
+        "mean_excess_px": 9.576346397399902,
+        "p95_excess_px": 35.18302917480469,
+        "note": "subtracts the independently audited label-to-edge tolerance; not a replacement for manually corrected ground truth"
+      }
+    }
+  },
+  "excluded_outside_crop": 1314,
+  "aggregate": {
+    "frames": 11316,
+    "detection_rate": 0.9721633085896076,
+    "raw_vs_noisy_label": {
+      "mean_px": 8.57813549041748,
+      "median_px": 3.7940425872802734,
+      "p95_px": 34.149906158447266,
+      "pck_4px": 0.528897136797455,
+      "pck_8px": 0.7617532697066101
+    },
+    "tolerance_adjusted_upper_bound": {
+      "label_tolerance_px": 3.25,
+      "mean_excess_px": 5.777465343475342,
+      "p95_excess_px": 30.899906158447266,
+      "note": "subtracts the independently audited label-to-edge tolerance; not a replacement for manually corrected ground truth"
+    }
+  },
+  "danger_metrics": null,
+  "danger_metrics_reason": "real flights contain gates but no obstacles or collision labels"
+}

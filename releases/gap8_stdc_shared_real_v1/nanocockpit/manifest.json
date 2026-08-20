@@ -1,0 +1,100 @@
+{
+  "format": "nanocockpit-stdc-shared-dory-v1",
+  "name": "gap8-stdc-real-dory-shared",
+  "input": {
+    "dtype": "uint8",
+    "layout": "HWC",
+    "shape": [
+      120,
+      160,
+      1
+    ]
+  },
+  "outputs": {
+    "corner": {
+      "shape": [
+        30,
+        40,
+        4
+      ],
+      "bytes": 4800
+    },
+    "danger": {
+      "shape": [
+        8,
+        10,
+        1
+      ],
+      "bytes": 80
+    }
+  },
+  "integer_affine": {
+    "corner": {
+      "epsilon": 0.035684287548065186,
+      "offset": [
+        5.898506505584717,
+        5.7032502723693845,
+        7.697502000427246,
+        5.727203233337402
+      ],
+      "learned_bias": [
+        -0.01988922990858555,
+        -0.39433032274246216,
+        -0.06018334627151489,
+        -0.026028143242001534
+      ]
+    },
+    "danger": {
+      "epsilon": 0.34079399704933167,
+      "offset": [
+        16.512078149414062
+      ],
+      "learned_bias": [
+        -0.012773600406944752
+      ]
+    }
+  },
+  "danger_probability_threshold": 0.07227228581905365,
+  "danger_threshold_metrics": {
+    "threshold": 0.07227228581905365,
+    "tp": 24174,
+    "fp": 3777,
+    "fn": 187,
+    "tn": 12822,
+    "precision": 0.864870666523559,
+    "recall": 0.9923237962316818,
+    "false_negative_rate": 0.007676203768318213,
+    "iou": 0.8591228943066316
+  },
+  "gate_geometry": {
+    "minimum_confident_corners": 3,
+    "three_corner_completion": "ordered affine parallelogram",
+    "recovered_corner_bounds_xy": [
+      0,
+      159,
+      20,
+      139
+    ],
+    "full_gate_corner_weight": 0.88,
+    "recovered_gate_corner_weight": 0.8,
+    "post_completion_checks": [
+      "ordering",
+      "convexity",
+      "area",
+      "aspect"
+    ],
+    "two_or_more_missing_policy": "reject"
+  },
+  "memory": {
+    "proven_peak_directional_allocator_bytes": 153984,
+    "strict_allocator_required_bytes": 153985,
+    "nanocockpit_workspace_configured_bytes": 180000,
+    "linked_static_l2_bytes": 242476,
+    "linked_static_l2_includes_workspace": true,
+    "dory_max_l1_tile_bytes": 36289
+  },
+  "source_reports": {
+    "nemo": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/nemo_stdc_shared_report.json",
+    "parity": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/heldout_parity_metrics.json"
+  }
+}

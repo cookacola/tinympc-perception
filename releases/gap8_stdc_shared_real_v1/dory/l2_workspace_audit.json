@@ -1,0 +1,378 @@
+{
+  "format": "dory-directional-l2-audit-v1",
+  "package": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared",
+  "graphs": {
+    "corner_head": {
+      "layers": 3,
+      "peak_live_bytes": 77344,
+      "final_begin_bytes": 0,
+      "final_end_bytes": 4800,
+      "trace": [
+        {
+          "layer": 0,
+          "begin_bytes": 0,
+          "end_bytes": 38400,
+          "live_bytes": 38400,
+          "peak_bytes": 77344
+        },
+        {
+          "layer": 1,
+          "begin_bytes": 19200,
+          "end_bytes": 0,
+          "live_bytes": 19200,
+          "peak_bytes": 77344
+        },
+        {
+          "layer": 2,
+          "begin_bytes": 0,
+          "end_bytes": 4800,
+          "live_bytes": 4800,
+          "peak_bytes": 77344
+        }
+      ]
+    },
+    "danger_head": {
+      "layers": 35,
+      "peak_live_bytes": 57600,
+      "final_begin_bytes": 0,
+      "final_end_bytes": 80,
+      "trace": [
+        {
+          "layer": 0,
+          "begin_bytes": 0,
+          "end_bytes": 9600,
+          "live_bytes": 9600,
+          "peak_bytes": 48544
+        },
+        {
+          "layer": 1,
+          "begin_bytes": 19200,
+          "end_bytes": 0,
+          "live_bytes": 19200,
+          "peak_bytes": 48544
+        },
+        {
+          "layer": 2,
+          "begin_bytes": 0,
+          "end_bytes": 19200,
+          "live_bytes": 19200,
+          "peak_bytes": 48544
+        },
+        {
+          "layer": 3,
+          "begin_bytes": 38400,
+          "end_bytes": 0,
+          "live_bytes": 38400,
+          "peak_bytes": 48544
+        },
+        {
+          "layer": 4,
+          "begin_bytes": 0,
+          "end_bytes": 19200,
+          "live_bytes": 19200,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 5,
+          "begin_bytes": 19200,
+          "end_bytes": 0,
+          "live_bytes": 19200,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 6,
+          "begin_bytes": 0,
+          "end_bytes": 38400,
+          "live_bytes": 38400,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 7,
+          "begin_bytes": 19200,
+          "end_bytes": 0,
+          "live_bytes": 19200,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 8,
+          "begin_bytes": 0,
+          "end_bytes": 19200,
+          "live_bytes": 19200,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 9,
+          "begin_bytes": 38400,
+          "end_bytes": 0,
+          "live_bytes": 38400,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 10,
+          "begin_bytes": 0,
+          "end_bytes": 19200,
+          "live_bytes": 19200,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 11,
+          "begin_bytes": 5120,
+          "end_bytes": 0,
+          "live_bytes": 5120,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 12,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 13,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 14,
+          "begin_bytes": 0,
+          "end_bytes": 15360,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 15,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 16,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 17,
+          "begin_bytes": 15360,
+          "end_bytes": 0,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 18,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 19,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 20,
+          "begin_bytes": 0,
+          "end_bytes": 15360,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 21,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 22,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 23,
+          "begin_bytes": 15360,
+          "end_bytes": 0,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 24,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 25,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 26,
+          "begin_bytes": 0,
+          "end_bytes": 15360,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 27,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 28,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 29,
+          "begin_bytes": 15360,
+          "end_bytes": 0,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 30,
+          "begin_bytes": 0,
+          "end_bytes": 7680,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 31,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 32,
+          "begin_bytes": 0,
+          "end_bytes": 15360,
+          "live_bytes": 15360,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 33,
+          "begin_bytes": 7680,
+          "end_bytes": 0,
+          "live_bytes": 7680,
+          "peak_bytes": 57600
+        },
+        {
+          "layer": 34,
+          "begin_bytes": 0,
+          "end_bytes": 80,
+          "live_bytes": 80,
+          "peak_bytes": 57600
+        }
+      ]
+    },
+    "encoder": {
+      "layers": 11,
+      "peak_live_bytes": 153984,
+      "final_begin_bytes": 0,
+      "final_end_bytes": 38400,
+      "trace": [
+        {
+          "layer": 0,
+          "begin_bytes": 0,
+          "end_bytes": 76800,
+          "live_bytes": 76800,
+          "peak_bytes": 96272
+        },
+        {
+          "layer": 1,
+          "begin_bytes": 76800,
+          "end_bytes": 0,
+          "live_bytes": 76800,
+          "peak_bytes": 153872
+        },
+        {
+          "layer": 2,
+          "begin_bytes": 0,
+          "end_bytes": 76800,
+          "live_bytes": 76800,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 3,
+          "begin_bytes": 19200,
+          "end_bytes": 0,
+          "live_bytes": 19200,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 4,
+          "begin_bytes": 0,
+          "end_bytes": 38400,
+          "live_bytes": 38400,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 5,
+          "begin_bytes": 38400,
+          "end_bytes": 0,
+          "live_bytes": 38400,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 6,
+          "begin_bytes": 0,
+          "end_bytes": 76800,
+          "live_bytes": 76800,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 7,
+          "begin_bytes": 38400,
+          "end_bytes": 0,
+          "live_bytes": 38400,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 8,
+          "begin_bytes": 0,
+          "end_bytes": 38400,
+          "live_bytes": 38400,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 9,
+          "begin_bytes": 76800,
+          "end_bytes": 0,
+          "live_bytes": 76800,
+          "peak_bytes": 153984
+        },
+        {
+          "layer": 10,
+          "begin_bytes": 0,
+          "end_bytes": 38400,
+          "live_bytes": 38400,
+          "peak_bytes": 153984
+        }
+      ]
+    }
+  },
+  "peak_live_bytes": 153984,
+  "strict_allocator_required_bytes": 153985,
+  "configured_workspace_bytes": 180000,
+  "margin_bytes": 26015,
+  "passed": true
+}

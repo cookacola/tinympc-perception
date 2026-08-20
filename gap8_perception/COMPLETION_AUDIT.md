@@ -1,4 +1,7 @@
-# Requirement audit
+# Historical dense-danger requirement audit (non-canonical)
+
+This file is retained only to reproduce a superseded model. The canonical
+audit is `SEQUENTIAL_COMPLETION_AUDIT.md`, governed by the completed design.
 
 Last updated: 2026-07-27. “Complete” below means supported by an inspected
 artifact or test. It does not imply real-flight safety.

@@ -1,0 +1,51 @@
+{
+  "format": "tinympc-two-frame-espnet-release-v1",
+  "name": "espnet_two_frame_v1",
+  "recommendation": {
+    "accuracy_and_future_training": "model/accuracy_teacher_epoch11.pt",
+    "float_gap8_export_source": "model/espnet_dory_student_epoch15.pt",
+    "gap8_deployment_network": "gap8-espnet-dory-student-v2-hybrid-qat"
+  },
+  "provenance": {
+    "training_repository": "git@github.com:cookacola/tinympc-perception.git",
+    "training_branch": "agent/newbeedrone-gate-texture",
+    "training_source_commit": "49931f23ce349850ed3d4710c1c8b63a5eeb4733",
+    "deployment_branch": "agent/espnet-dory-deployment",
+    "deployment_source_commit": "f57f1ebedc929eacae26870f233ff0f34463e320",
+    "nanocockpit_repository": "git@github.com:cookacola/tinympc-nanocockpit.git",
+    "nanocockpit_branch": "agent/espnet-nemo-dory",
+    "nanocockpit_source_commit": "b619f4e0c5e6917b813160572c4b48f9586838b6"
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1946,
+      "sha256": "1901c62eb9e19b9b5800deca57b148ed7dfd3415ef4e91c791c792de6235510a"
+    },
+    {
+      "path": "model/accuracy_teacher_epoch11.pt",
+      "bytes": 1155019,
+      "sha256": "e9faf5e11cb88eb4d9da8d49cf2b01cfcda1c77c6a84c9f73138b87f17d15ec1"
+    },
+    {
+      "path": "model/espnet_dory_student_epoch15.pt",
+      "bytes": 505465,
+      "sha256": "7134a7a358fed932033765f8f25a44130b2a718553c38ce24ba6c2b939a34d5a"
+    },
+    {
+      "path": "metrics/accuracy_teacher.json",
+      "bytes": 1922,
+      "sha256": "256d73491c6fe0c617574cd75d0cdcc6f2009fe2f6b49ce1d9f449a9d9305349"
+    },
+    {
+      "path": "metrics/float_student.json",
+      "bytes": 1140,
+      "sha256": "df7db9a7353d71ccf340fc5aa08c247b46b804a0ec947eb22196ddaac697d516"
+    },
+    {
+      "path": "metrics/hybrid_gap8.json",
+      "bytes": 1988,
+      "sha256": "a5736a9bdd775504ec66c39193c3a815f7ed0b08cb1f615367d38f80e3a13b92"
+    }
+  ]
+}

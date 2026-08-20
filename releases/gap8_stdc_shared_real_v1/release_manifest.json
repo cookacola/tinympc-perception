@@ -1,0 +1,115 @@
+{
+  "format": "gap8-stdc-real-release-v2",
+  "selected_model": "shared_dory_frozen_real_v1",
+  "selection_note": "flight-06 training, flight-07 selection, untouched flight-08 test; post-selection compressed refit was evaluated and rejected",
+  "files": [
+    {
+      "path": "model/selected.pt",
+      "bytes": 1357381,
+      "sha256": "1a1ec7676c5a6f057a0c7521ae60748ef9cf4c8b44315a029f61f0367f0186cd",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1/best_total.pt"
+    },
+    {
+      "path": "metrics/synthetic_test.json",
+      "bytes": 9123,
+      "sha256": "614d5edf56850c06c152696a8cddf83965e9c53cfc3541cdda695077130a4d73",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1/test_metrics.json"
+    },
+    {
+      "path": "metrics/real_flight08.json",
+      "bytes": 2888,
+      "sha256": "0138c390f937006c3abcf8ba6dd86ad90160f8416d7b2086c2e2246b2c0d3a08",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1/real_flights.json"
+    },
+    {
+      "path": "metrics/integer_heldout.json",
+      "bytes": 1852,
+      "sha256": "8d34010449c64ea8db2f16f403a03c22eec491d4e1d0f43c27519f1d055ede22",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/heldout_parity_metrics.json"
+    },
+    {
+      "path": "nanocockpit/manifest.json",
+      "bytes": 2353,
+      "sha256": "5b4fef14e49f367bbe13ed9d4fb3523110946ca69045502914e7d133feabb934",
+      "source": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared/manifest.json"
+    },
+    {
+      "path": "integer/nemo_report.json",
+      "bytes": 2988,
+      "sha256": "211e17c06a7c118025b9f334b34081e3a033bf04dd9e4d96af64fbb053a8c1bc",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/nemo_stdc_shared_report.json"
+    },
+    {
+      "path": "integer/encoder_int.onnx",
+      "bytes": 23525,
+      "sha256": "2da88a45da40e3dc59a8e1aa2b172b91af3e3ad65cabdc63701f14a51203c28d",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/encoder/encoder_int.onnx"
+    },
+    {
+      "path": "integer/corner_head_int.onnx",
+      "bytes": 5736,
+      "sha256": "54e05e021b35bb21a3ba8cd319f7dd1be8caba7a59736292d5703ba963ae84cb",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/corner_head/corner_head_int.onnx"
+    },
+    {
+      "path": "integer/danger_head_int.onnx",
+      "bytes": 411351,
+      "sha256": "303314d0df1094c3828ed7fd050588900b3c7ed1e6ae9b6e97f572b57ef99fbc",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/integer/danger_head/danger_head_int.onnx"
+    },
+    {
+      "path": "dory/encoder_report.json",
+      "bytes": 1347,
+      "sha256": "ce2a3e8b4abbf61c295c1650d54cd487981769fb6cc0a9faf6d41405be33c4f7",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/encoder_dory_report.json"
+    },
+    {
+      "path": "dory/corner_head_report.json",
+      "bytes": 1098,
+      "sha256": "c8e7c02e78957e172450d66224aecc5e3e784e0d865b4c90bfbc824b750fb470",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/corner_head_dory_report.json"
+    },
+    {
+      "path": "dory/danger_head_report.json",
+      "bytes": 2113,
+      "sha256": "a7146de1e5e8beaf24ed76d23485ef8e08130ef36eb7c36a793da772db4e508d",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/danger_head_dory_report.json"
+    },
+    {
+      "path": "metrics/real_flight_bias.json",
+      "bytes": 8169,
+      "sha256": "a7221993bc0f51d7bd00de92f426b7bfd8dee6f272cae3cd6854782d485ced21",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_real_bias_aug_v1.json"
+    },
+    {
+      "path": "firmware/cf21bl.bin",
+      "bytes": 353948,
+      "sha256": "25c6e71eb2353458ee83505ad36ad38e2e83955ee5403d9246cc6f0ff2d24943",
+      "source": "/home/cchen/tinympc-crazyflie/apps/controller_tinympc_eigen/build/cf21bl.bin"
+    },
+    {
+      "path": "firmware/cf21bl.hex",
+      "bytes": 995616,
+      "sha256": "c938645a659b1a1e4fb5d4bf5692e8133f7f1146ba5f82c54df8bd1047cd7ba2",
+      "source": "/home/cchen/tinympc-crazyflie/apps/controller_tinympc_eigen/build/cf21bl.hex"
+    },
+    {
+      "path": "dory/l2_workspace_audit.json",
+      "bytes": 8763,
+      "sha256": "52f85d9e20ee85d0723164e2aaa8ded6cbb42edce350b3d4fe75db623a83349a",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/dory_l2_workspace_audit.json"
+    },
+    {
+      "path": "nanocockpit/output_decoder_audit.json",
+      "bytes": 1004,
+      "sha256": "71ee1ca5a7d4a8c8beef861ec708e1244f70803b3922f5606ce24e14aa1aaab1",
+      "source": "/home/cchen/isaacsim-workspace/workspace/gap8_stdc_shared_dory_frozen_real_v1_export/nanocockpit_output_decoder_audit.json"
+    },
+    {
+      "path": "nanocockpit/gap8-stdc-real-dory-shared.tar.gz",
+      "bytes": 162155,
+      "sha256": "ff5357597b48ab8a4e72217a7c5cbfbd4cdd38d3e03ce5158f11f963e7f527a9",
+      "source": "/home/cchen/tinympc-nanocockpit/src/gap/examples/pulp-frontnet/app/networks/gap8-stdc-real-dory-shared"
+    }
+  ]
+}

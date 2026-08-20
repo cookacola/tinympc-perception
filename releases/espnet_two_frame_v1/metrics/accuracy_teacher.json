@@ -1,0 +1,55 @@
+{
+  "format": "tinympc-espnet-accuracy-teacher-metrics-v1",
+  "checkpoint": "model/accuracy_teacher_epoch11.pt",
+  "checkpoint_sha256": "e9faf5e11cb88eb4d9da8d49cf2b01cfcda1c77c6a84c9f73138b87f17d15ec1",
+  "checkpoint_bytes": 1155019,
+  "epoch": 11,
+  "input": {
+    "shape_chw": [2, 160, 160],
+    "dtype": "float32",
+    "range": [0.0, 1.0],
+    "channel_order": ["previous", "current"],
+    "pairing": "adjacent frames from the same trajectory and flight"
+  },
+  "selection": {
+    "split": "validation",
+    "test_metrics_used_for_selection": false,
+    "ranking": "unsafe recall, then collision AP, then synthetic gate IoU",
+    "selected_epoch": 11
+  },
+  "obstacle_validation": {
+    "examples": 2044,
+    "collision_positive_count": 191,
+    "clearance_mae_m": 0.093428133601625,
+    "unsafe_clearance_recall": 0.9887905604719764,
+    "collision_auroc": 0.9833607875159286,
+    "collision_ap": 0.9008187557976074,
+    "clearance_mae_cvar90_m": 0.3318456261248207,
+    "collision_bce_cvar90": 1.7620433574814987
+  },
+  "obstacle_test": {
+    "examples": 3814,
+    "collision_positive_count": 358,
+    "clearance_mae_m": 0.08862889966099254,
+    "unsafe_clearance_recall": 0.910574412532637,
+    "collision_auroc": 0.9811824306848749,
+    "collision_ap": 0.8921446071930139,
+    "clearance_mae_cvar90_m": 0.25916446312714975,
+    "collision_bce_cvar90": 1.6514555616206759
+  },
+  "gate_validation": {
+    "synthetic_gate_iou": 0.5443765337072658,
+    "synthetic_corner_mean_px": 8.01263427734375,
+    "synthetic_corner_p95_px": 41.099029541015625,
+    "real_examples": 4481,
+    "real_corner_mean_px": 15.041961669921875,
+    "real_corner_p95_px": 52.9483757019043,
+    "explicit_no_gate_false_positive_rate": 0.07366666666666667,
+    "explicit_no_gate_mask_pixel_rate": 0.0019770833333333333
+  },
+  "real_flight_split": {
+    "train": ["flight_06"],
+    "validation": ["flight_07"],
+    "test": ["flight_08"]
+  }
+}

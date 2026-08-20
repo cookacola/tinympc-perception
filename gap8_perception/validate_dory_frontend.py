@@ -3,11 +3,28 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
+
+import numpy as np
 
 from dory.Frontend_frameworks.NEMO.Parser import onnx_manager
 from dory.Hardware_targets.PULP.GAP8.HW_Parser import onnx_manager as gap8_backend
 from dory.Parsers.HW_node import HW_node
+
+
+def write_checksum_input_source(app_dir: Path):
+    data = (app_dir / "hex/gap8_inputs.hex").read_bytes()
+    rows = [
+        ", ".join(str(value) for value in data[start : start + 24])
+        for start in range(0, len(data), 24)
+    ]
+    (app_dir / "src/gap8_checksum_input.c").write_text(
+        "#include <stdint.h>\n"
+        "const uint8_t gap8_checksum_input[] = {\n  "
+        + ",\n  ".join(rows)
+        + "\n};\n"
+    )
 
 
 def main():
@@ -15,12 +32,45 @@ def main():
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--app-dir", type=Path)
+    parser.add_argument(
+        "--bnrelu-bits", type=int, choices=(32, 64), default=64,
+        help=(
+            "width of fused BN/ReLU k and lambda constants; 64 is the "
+            "safe GAP8 setting for this model"
+        ),
+    )
+    # The deployed student emits uint8 [12, 15, 20] scores: 3,600 bytes.
+    # Keep this default tied to the design contract instead of the legacy
+    # 40x40 auxiliary-head tensor used by older graphs.
+    parser.add_argument("--expected-output-bytes", type=int, default=12 * 15 * 20)
+    parser.add_argument(
+        "--l2-buffer-bytes", type=int, default=180000,
+        help="generated application activation arena; must fit GAP8 L2",
+    )
     args = parser.parse_args()
+    # The 32-bit GAP8 kernel evaluates (k * convolution_sum) + lambda in
+    # signed int32_t. The sequential student has a validated layer-12
+    # fixture outside that range, even though its final uint8 output is
+    # representable. The installed DORY 64-bit backend keeps this affine
+    # intermediate wide without changing the learned graph.
     config = {
-        "BNRelu_bits": 32,
+        "BNRelu_bits": args.bnrelu_bits,
         "input_bits": 8,
         "input_signed": False,
     }
+    if args.bnrelu_bits == 64:
+        # The pinned GAP8 backend ships a genuine int64 BN/ReLU kernel and
+        # serializes k/lambda as int64 when BNRelu_bits=64.  The local NEMO
+        # frontend's safety check predates that backend and still rejects
+        # coefficients that exceed int32.  Widen only that representability
+        # predicate; arithmetic, ONNX multipliers, and golden fixtures remain
+        # unchanged.
+        import dory.Frontend_frameworks.NEMO.Pattern_rewriter as pattern_module
+
+        pattern_module._fits_int32 = lambda value: bool(
+            np.all(np.asarray(value) >= np.iinfo(np.int64).min)
+            and np.all(np.asarray(value) <= np.iinfo(np.int64).max)
+        )
     graph = onnx_manager(str(args.onnx), config, "gap8_").full_graph_parsing()
     frontend_node_names = [node.name for node in graph]
     backend_config = dict(config)
@@ -31,13 +81,11 @@ def main():
     # NEMO emits one golden activation per fused frontend node. Derive the
     # expected count from the parsed graph so architecture changes cannot
     # silently disable checksum validation or retain a stale layer count.
+    golden_count = 0
+    while (args.onnx.parent / f"out_layer{golden_count}.txt").is_file():
+        golden_count += 1
     golden_files_present = (
-        (args.onnx.parent / "input.txt").is_file()
-        and all(
-            (args.onnx.parent / f"out_layer{layer}.txt").is_file()
-            for layer in range(len(graph))
-        )
-        and not (args.onnx.parent / f"out_layer{len(graph)}.txt").exists()
+        (args.onnx.parent / "input.txt").is_file() and golden_count > 0
     )
     if golden_files_present:
         hardware_graph = gap8_backend(
@@ -63,13 +111,21 @@ def main():
             )
         )))
     final_node = hardware_graph[-1]
+    if golden_files_present and golden_count != len(hardware_graph):
+        raise RuntimeError(
+            "golden activation count %d does not match fused hardware nodes %d"
+            % (golden_count, len(hardware_graph))
+        )
     final_output_bytes = int(final_node.output_activation_memory)
     final_output_bits = int(final_node.output_activation_bits)
     final_checksums = list(getattr(final_node, "check_sum_out", []) or [])
-    if final_output_bits != 8 or final_output_bytes != 12800:
+    if (
+        final_output_bits != 8
+        or final_output_bytes != args.expected_output_bytes
+    ):
         raise RuntimeError(
-            "expected uint8 [40,40,8] terminal output, got bits=%d bytes=%d"
-            % (final_output_bits, final_output_bytes)
+            "expected uint8 terminal output with %d bytes, got bits=%d bytes=%d"
+            % (args.expected_output_bytes, final_output_bits, final_output_bytes)
         )
     if golden_files_present and (
         not final_checksums or int(final_checksums[0]) <= 0
@@ -89,8 +145,12 @@ def main():
         "gap8_l1_capacity_bytes": 64000,
         "gap8_final_output_bits": final_output_bits,
         "gap8_final_output_bytes": final_output_bytes,
+        "expected_final_output_bytes": args.expected_output_bytes,
         "gap8_final_output_checksums": final_checksums,
+        "gap8_bnrelu_constant_bits": args.bnrelu_bits,
+        "overflow_safe_affine_intermediate": args.bnrelu_bits == 64,
         "activation_checksums_loaded": golden_files_present,
+        "golden_activation_files": golden_count,
         "activation_checksums_skipped": not golden_files_present,
         "remaining_gate": (
             "compile generated C and run GVSOC/physical GAP8 parity"
@@ -100,7 +160,7 @@ def main():
         from network_generate import network_generate
 
         dory_config = {
-            "BNRelu_bits": 32,
+            "BNRelu_bits": args.bnrelu_bits,
             "input_bits": 8,
             "input_signed": False,
             "onnx_file": args.onnx.name,
@@ -114,12 +174,103 @@ def main():
             verbose_level="Last+Perf_final", perf_layer="No",
             optional="8bit", appdir=str(args.app_dir), prefix="gap8",
         )
+        network_source = args.app_dir / "src" / "gap8_network.c"
+        bounded = network_source.read_text()
+        bounded = re.sub(
+            r"#define L3_WEIGHTS_SIZE \d+",
+            "#define L3_WEIGHTS_SIZE 262144",
+            bounded,
+        )
+        bounded = re.sub(
+            r"#define L3_INPUT_SIZE \d+",
+            "#define L3_INPUT_SIZE 131072",
+            bounded,
+        )
+        bounded = re.sub(
+            r"#define L3_OUTPUT_SIZE \d+",
+            "#define L3_OUTPUT_SIZE 131072",
+            bounded,
+        )
+        bounded = re.sub(
+            r'(#ifdef VERBOSE\n\s+printf\("Layer %s %d ended: \\n", '
+            r"Layers_name\[i\], i\);\n)"
+            r"(\s+if \(i == \d+\)\n\s+checksum\([^;]+;\n)"
+            r"(#endif)",
+            r'\1\3\n#ifdef DORY_CHECKSUM_HARNESS\n'
+            r'    checksum("layer", L2_output, activations_out_size[i], '
+            r'activations_out_checksum[i][exec]);\n'
+            r'#endif',
+            bounded,
+        )
+        network_source.write_text(bounded)
+        main_source = args.app_dir / "src" / "gap8_main.c"
+        main_text = re.sub(
+            r"size_t input_size = \d+;",
+            "size_t input_size = 131072;",
+            main_source.read_text(),
+        )
+        main_text = main_text.replace(
+            "pi_l2_free(l2_buffer, 417000);",
+            "pi_l2_free(l2_buffer, 417000);\n  pmsis_exit(0);",
+        )
+        main_text = main_text.replace(
+            "int main () {\n#ifndef TARGET_CHIP_FAMILY_GAP9",
+            "int main () {\n#ifndef DORY_CHECKSUM_HARNESS\n"
+            "#ifndef TARGET_CHIP_FAMILY_GAP9",
+        )
+        main_text = main_text.replace(
+            "\n\n  pmsis_kickoff((void*)application);",
+            "\n#endif\n\n  pmsis_kickoff((void*)application);",
+        )
+        main_text = main_text.replace(
+            "  pi_time_wait_us(10000);",
+            "#ifndef DORY_CHECKSUM_HARNESS\n"
+            "  pi_time_wait_us(10000);\n"
+            "#endif",
+        )
+        fixture_io = (
+            "  void *ram_input = ram_malloc(input_size);\n"
+            '      load_file_to_ram(ram_input, "gap8_inputs.hex");\n'
+            "      ram_read(l2_buffer, ram_input, l2_input_size);\n"
+            "      gap8_network_run(l2_buffer, 417000, l2_buffer, 0, initial_dir);\n"
+            "\n"
+            "  ram_free(ram_input, input_size);"
+        )
+        if fixture_io not in main_text:
+            raise RuntimeError("DORY main fixture-I/O template changed")
+        main_text = main_text.replace(
+            fixture_io,
+            "#ifdef DORY_CHECKSUM_HARNESS\n"
+            "  extern const uint8_t gap8_checksum_input[];\n"
+            "  for (size_t i = 0; i < l2_input_size; ++i)\n"
+            "    ((uint8_t *)l2_buffer)[i] = gap8_checksum_input[i];\n"
+            "#else\n"
+            "  void *ram_input = ram_malloc(input_size);\n"
+            '  load_file_to_ram(ram_input, "gap8_inputs.hex");\n'
+            "  ram_read(l2_buffer, ram_input, l2_input_size);\n"
+            "#endif\n"
+            f"  gap8_network_run(l2_buffer, {args.l2_buffer_bytes}, "
+            "l2_buffer, 0, initial_dir);\n"
+            "#ifndef DORY_CHECKSUM_HARNESS\n"
+            "  ram_free(ram_input, input_size);\n"
+            "#endif",
+        )
+        main_text = main_text.replace(
+            "pi_l2_malloc(417000)",
+            f"pi_l2_malloc({args.l2_buffer_bytes})",
+        )
+        main_text = main_text.replace(
+            "pi_l2_free(l2_buffer, 417000)",
+            f"pi_l2_free(l2_buffer, {args.l2_buffer_bytes})",
+        )
+        main_source.write_text(main_text)
+        write_checksum_input_source(args.app_dir)
         makefile = args.app_dir / "Makefile"
         makefile.write_text(
             makefile.read_text()
             + "\nDORY_CHECKSUM_HARNESS ?= 0\n"
             + "ifeq ($(DORY_CHECKSUM_HARNESS),1)\n"
-            + "APP_CFLAGS += -DVERBOSE\n"
+            + "APP_CFLAGS += -DDORY_CHECKSUM_HARNESS -DVERBOSE\n"
             + "endif\n"
         )
         generated_files = [path for path in args.app_dir.rglob("*") if path.is_file()]
