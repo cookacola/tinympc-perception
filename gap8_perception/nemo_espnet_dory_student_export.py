@@ -16,13 +16,22 @@ from gap8_perception import nemo_stdc_shared_dory_export as base
 from gap8_perception.nemo_stdc_dory_export import ConvBNReLU, DSConv, Stage
 
 
+class SequentialStage(nn.Sequential):
+    def __init__(self, cin, cout, refinements):
+        super(SequentialStage, self).__init__(
+            ConvBNReLU(cin, cout, 3, 2),
+            *[DSConv(cout, cout) for _ in range(refinements)]
+        )
+
+
 class EncoderNet(nn.Module):
     input_shape = (2, 160, 160)
 
-    def __init__(self):
+    def __init__(self, architecture="ESPNetDoryStudent"):
         super(EncoderNet, self).__init__()
         self.stem = nn.Sequential(ConvBNReLU(2, 16, 3, 2), DSConv(16, 16))
-        self.stage1 = Stage(16, 32, 2)
+        stage = SequentialStage if architecture == "DorySequentialStudent" else Stage
+        self.stage1 = stage(16, 32, 2)
 
     def forward(self, frames):
         return self.stage1(self.stem(frames))
@@ -52,10 +61,14 @@ class DangerHeadNet(nn.Module):
     input_shape = (32, 40, 40)
     output_channels = 1
 
-    def __init__(self):
+    def __init__(self, architecture="ESPNetDoryStudent"):
         super(DangerHeadNet, self).__init__()
-        self.stage2 = Stage(32, 64, 3)
-        self.stage3 = Stage(64, 96, 7)
+        if architecture == "DorySequentialStudent":
+            self.stage2 = SequentialStage(32, 64, 2)
+            self.stage3 = SequentialStage(64, 96, 4)
+        else:
+            self.stage2 = Stage(32, 64, 3)
+            self.stage3 = Stage(64, 96, 7)
         self.output_proj = ConvBNReLU(96, 1, 1)
 
     def forward_features(self, shared):
@@ -113,11 +126,13 @@ def main():
     parser.add_argument("--residual-requantization-factor", type=int, default=1)
     parser.add_argument("--qat-directory", type=Path)
     args = parser.parse_args()
+    bridge_report = json.loads((args.bridge / "bridge_report.json").read_text())
+    architecture = bridge_report["architecture"]
     base.image_tensor = paired_image_tensor
     calibration = sampled(temporal_pairs(args.dataset, "train"), args.calibration_images)
     parity = sampled(temporal_pairs(args.dataset, "test"), args.parity_images)
 
-    encoder = EncoderNet()
+    encoder = EncoderNet(architecture)
     base.load_archive(encoder, args.bridge / "encoder_float_state.npz")
     encoder_integer, encoder_float, encoder_report = base.quantize_encoder(
         encoder, calibration, parity, args.output / "encoder",
@@ -130,7 +145,7 @@ def main():
     for name, model in (
         ("corner_head", FineHeadNet(4)),
         ("gate_head", FineHeadNet(1)),
-        ("danger_head", DangerHeadNet()),
+        ("danger_head", DangerHeadNet(architecture)),
     ):
         base.load_head(model, args.bridge / (name + "_float_state.npz"), name)
         reports.append(base.quantize_head(
@@ -144,7 +159,7 @@ def main():
         ))
     report = {
         "format": "espnet-dory-student-nemo-v1",
-        "architecture": "ESPNetDoryStudent",
+        "architecture": architecture,
         "temporal_input_order": ["previous", "current"],
         "input_layout": "HWC with two interleaved uint8 channels in DORY",
         "graphs": reports,

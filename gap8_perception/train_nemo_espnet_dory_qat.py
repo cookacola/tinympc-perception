@@ -57,7 +57,10 @@ def configure_adds(model, factor):
 
 
 def build(graph, bridge):
-    encoder = EncoderNet()
+    architecture = json.loads(
+        (bridge / "bridge_report.json").read_text()
+    )["architecture"]
+    encoder = EncoderNet(architecture)
     load_archive(encoder, bridge / "encoder_float_state.npz")
     if graph == "encoder":
         return encoder, None, encoder.input_shape
@@ -66,7 +69,7 @@ def build(graph, bridge):
     elif graph == "gate_head":
         model = FineHeadNet(1)
     else:
-        model = DangerHeadNet()
+        model = DangerHeadNet(architecture)
     load_head(model, bridge / (graph + "_float_state.npz"), graph)
     return model, encoder.eval(), model.input_shape
 
