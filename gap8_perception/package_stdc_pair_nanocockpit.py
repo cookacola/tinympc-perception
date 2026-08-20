@@ -57,7 +57,7 @@ def namespace_text(text: str, graph: str) -> str:
 
 def copy_namespaced_graph(source: Path, destination: Path, graph: str):
     for path in sorted((source / "src").glob("gap8_*.c")):
-        if path.name == "gap8_main.c":
+        if path.name in ("gap8_main.c", "gap8_checksum_input.c"):
             continue
         name = path.name.replace("gap8_", "stdc_%s_" % graph)
         (destination / "src" / name).write_text(
