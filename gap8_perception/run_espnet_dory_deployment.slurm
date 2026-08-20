@@ -25,6 +25,14 @@ OBSTACLE_CHECKPOINT=$WORKSPACE/tinympc_event_aligned_finalists_20260816/espnetv2
 GATE_CHECKPOINT=$WORKSPACE/newbeedrone_joint_espnet_middle_finetune/best.pt
 GAP_SDK=${GAP_SDK:-/home/cchen/gap_sdk_dory}
 GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
+DORY_ROOT=${DORY_ROOT:-/home/cchen/dory}
+NETWORK_NAME=${NETWORK_NAME:-gap8-espnet-dory-student-v2}
+
+if ! grep -q 'uint16_t add_shift' \
+  "$DORY_ROOT/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/include/pulp_nn_kernels.h"; then
+  echo "Apply gap8_perception/patches/dory-gap8-exact-residual-requant.patch to $DORY_ROOT first" >&2
+  exit 2
+fi
 
 mkdir -p "$OUTPUT"
 cd "$TRAINING_REPO"
@@ -55,14 +63,18 @@ PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
 declare -A BYTES=(
   [encoder]=51200 [corner_head]=6400 [gate_head]=1600 [danger_head]=100
 )
+declare -A L2_BYTES=(
+  [encoder]=260000 [corner_head]=180000 [gate_head]=180000 [danger_head]=180000
+)
 for graph in encoder corner_head gate_head danger_head; do
-  cd /home/cchen/dory
-  PYTHONPATH=/home/cchen/dory /home/cchen/miniconda3/envs/dory/bin/python \
+  cd "$DORY_ROOT"
+  PYTHONPATH="$DORY_ROOT" /home/cchen/miniconda3/envs/dory/bin/python \
     "$REPO/gap8_perception/validate_dory_frontend.py" \
     --onnx "$OUTPUT/integer/$graph/${graph}_int.onnx" \
     --output "$OUTPUT/${graph}_dory_report.json" \
     --app-dir "$OUTPUT/${graph}_gap8_application" \
-    --expected-output-bytes "${BYTES[$graph]}"
+    --expected-output-bytes "${BYTES[$graph]}" \
+    --l2-buffer-bytes "${L2_BYTES[$graph]}"
 done
 
 source /home/cchen/miniconda3/etc/profile.d/conda.sh
@@ -95,13 +107,13 @@ PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
   --integer-evaluation "$OUTPUT/integer_ground_truth.json" \
   --student-summary "$STUDENT/summary.json" \
   --destination "$NANOCOCKPIT/src/gap/examples/tiny-racer/app/networks" \
-  --name gap8-espnet-dory-student-v1
+  --name "$NETWORK_NAME"
 
 set +u
 source "$GAP_SDK/configs/ai_deck.sh"
 set -u
 cd "$NANOCOCKPIT/src/gap/examples/tiny-racer"
-make clean NETWORK_NAME=gap8-espnet-dory-student-v1
-make build NETWORK_NAME=gap8-espnet-dory-student-v1 \
+make clean NETWORK_NAME="$NETWORK_NAME"
+make build NETWORK_NAME="$NETWORK_NAME" \
   2>&1 | tee "$OUTPUT/nanocockpit_firmware_build.log"
 test -x BUILD/GAP8_V2/GCC_RISCV/pulp_frontnet

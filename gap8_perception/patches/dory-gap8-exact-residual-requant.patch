@@ -1,0 +1,146 @@
+--- a/dory/Hardware_targets/PULP/Common/HW_Pattern_rewriter.py
++++ b/dory/Hardware_targets/PULP/Common/HW_Pattern_rewriter.py
+@@ -71,10 +71,18 @@
+     def NodeRelu_pattern_rewriter(self, i):
+         DORY_Relu_node = self.graph[i[0]]
++        relu_outmul = self.graph[i[1]].outmul
++        relu_outshift = self.graph[i[1]].outshift
++        # Preserve the pre-ReLU addition shift separately.  The GAP8 fused
++        # residual kernel consumes it before applying the ReLU multiplier
++        # and shift, matching NEMO's two-stage integer rounding exactly.
++        if DORY_Relu_node.op_type == "QAddition":
++            add_shift = int(DORY_Relu_node.outshift["value"])
++            DORY_Relu_node.inshift1 = {"value": add_shift, "layout": ""}
+         DORY_Relu_node.name = "Relu"+self.graph[i[0]].name
+         DORY_Relu_node.op_type = "Relu"+self.graph[i[0]].op_type
+         DORY_Relu_node.output_index = self.graph[i[1]].output_index
+-        DORY_Relu_node.outmul = self.graph[i[1]].outmul
+-        DORY_Relu_node.outshift = self.graph[i[1]].outshift
++        DORY_Relu_node.outmul = relu_outmul
++        DORY_Relu_node.outshift = relu_outshift
+         DORY_Relu_node.min = self.graph[i[1]].min
+         DORY_Relu_node.max = self.graph[i[1]].max
+         DORY_Relu_node.constant_names.append("outmul")
+--- a/dory/Hardware_targets/PULP/GAP8/Templates/layer_templates/layer_L2_c_addition_template.c
++++ b/dory/Hardware_targets/PULP/GAP8/Templates/layer_templates/layer_L2_c_addition_template.c
+@@ -150,6 +150,8 @@
+       y,
+       ${inmul2},
+       ${inmul1},
++      ${inshift1},
++      ${outmul},
+       ${outshift},
+       x_tile_size_w,
+       x_tile_size_h,
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/include/pulp_nn_kernels.h
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/include/pulp_nn_kernels.h
+@@ -24,6 +24,8 @@
+   uint8_t * Im_out,            // pointer to the output
+   uint16_t out_mult1,            // paramter to requantize
+   uint16_t out_mult2,            // paramter to requantize
++  uint16_t add_shift,             // shift applied immediately after addition
++  uint16_t out_mult,              // post-add ReLU multiplier
+   uint16_t out_shift,            // paramter to requantize
+   uint16_t  dim_im_in_h,
+   uint16_t  dim_im_in_w,
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/include/pulp_nn_utils.h
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/include/pulp_nn_utils.h
+@@ -29 +29 @@
+-uint8_t pulp_nn_add_quant_u8 (uint8_t pix1,uint8_t pix2,int16_t m1,int16_t m2,int8_t  d);
++uint8_t pulp_nn_add_quant_u8 (uint8_t pix1,uint8_t pix2,int16_t m1,int16_t m2,int8_t add_shift,int16_t out_mult,int8_t out_shift);
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/src/pulp_nn_add.c
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/src/pulp_nn_add.c
+@@ -30,6 +30,8 @@
+     uint8_t * Im_out,            // pointer to the output
+     uint16_t out_mult1,            // paramter to requantize
+     uint16_t out_mult2,            // paramter to requantize
++    uint16_t add_shift,             // shift applied immediately after addition
++    uint16_t out_mult,              // post-add ReLU multiplier
+     uint16_t out_shift,            // paramter to requantize
+     uint16_t  dim_im_in_h,
+     uint16_t  dim_im_in_w,
+@@ -53,7 +55,7 @@
+     uint8_t *pOut = Im_out + start*ch_im_in*dim_im_in_w;
+     for (int spatial = 0; spatial<dim_im_in_w*ch_im_in*(stop-start); spatial+=1)
+     {
+-        *pOut = pulp_nn_add_quant_u8(*target1, *target2, out_mult1, out_mult2, out_shift);
++        *pOut = pulp_nn_add_quant_u8(*target1, *target2, out_mult1, out_mult2, add_shift, out_mult, out_shift);
+         target1 += 1;
+         target2 += 1;
+         pOut += 1;
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/src/pulp_nn_utils.c
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/32bit/src/pulp_nn_utils.c
+@@ -49,12 +49,15 @@
+   uint8_t pix2,
+   int16_t m1,
+   int16_t m2,
+-  int8_t  d
++  int8_t  add_shift,
++  int16_t out_mult,
++  int8_t  out_shift
+ ) {
+   /* Integer Batch Normalization */
+   uint32_t integer_image = pix1*m1 + pix2*m2;
+   /* Quantization */
+-  uint16_t x = (integer_image) >> d;
++  uint32_t added = integer_image >> add_shift;
++  uint32_t x = (added * out_mult) >> out_shift;
+   uint8_t res = clip8(x);
+   return res;
+ }
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/include/pulp_nn_kernels.h
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/include/pulp_nn_kernels.h
+@@ -24,6 +24,8 @@
+   uint8_t * Im_out,            // pointer to the output
+   uint16_t out_mult1,            // paramter to requantize
+   uint16_t out_mult2,            // paramter to requantize
++  uint16_t add_shift,             // shift applied immediately after addition
++  uint16_t out_mult,              // post-add ReLU multiplier
+   uint16_t out_shift,            // paramter to requantize
+   uint16_t  dim_im_in_h,
+   uint16_t  dim_im_in_w,
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/include/pulp_nn_utils.h
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/include/pulp_nn_utils.h
+@@ -29 +29 @@
+-uint8_t pulp_nn_add_quant_u8(uint8_t pix1,uint8_t pix2,int16_t m1,int16_t m2,int8_t  d);
++uint8_t pulp_nn_add_quant_u8(uint8_t pix1,uint8_t pix2,int16_t m1,int16_t m2,int8_t add_shift,int16_t out_mult,int8_t out_shift);
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/src/pulp_nn_add.c
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/src/pulp_nn_add.c
+@@ -30,6 +30,8 @@
+     uint8_t * Im_out,            // pointer to the output
+     uint16_t out_mult1,            // paramter to requantize
+     uint16_t out_mult2,            // paramter to requantize
++    uint16_t add_shift,             // shift applied immediately after addition
++    uint16_t out_mult,              // post-add ReLU multiplier
+     uint16_t out_shift,            // paramter to requantize
+     uint16_t  dim_im_in_h,
+     uint16_t  dim_im_in_w,
+@@ -53,7 +55,7 @@
+     uint8_t *pOut = Im_out + start*ch_im_in*dim_im_in_w;
+     for (int spatial = 0; spatial<dim_im_in_w*ch_im_in*(stop-start); spatial+=1)
+     {
+-        *pOut = pulp_nn_add_quant_u8(*target1, *target2, out_mult1, out_mult2, out_shift);
++        *pOut = pulp_nn_add_quant_u8(*target1, *target2, out_mult1, out_mult2, add_shift, out_mult, out_shift);
+         target1 += 1;
+         target2 += 1;
+         pOut += 1;
+--- a/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/src/pulp_nn_utils.c
++++ b/dory/Hardware_targets/PULP/Backend_Kernels/pulp-nn/64bit/src/pulp_nn_utils.c
+@@ -48,12 +48,15 @@
+   uint8_t pix2,
+   int16_t m1,
+   int16_t m2,
+-  int8_t  d
++  int8_t  add_shift,
++  int16_t out_mult,
++  int8_t  out_shift
+ ) {
+   /* Integer Batch Normalization */
+   uint32_t integer_image = pix1*m1 + pix2*m2;
+   /* Quantization */
+-  uint16_t x = (integer_image) >> d;
++  uint32_t added = integer_image >> add_shift;
++  uint32_t x = (added * out_mult) >> out_shift;
+   uint8_t res = clip8(x);
+   return res;
+ }
