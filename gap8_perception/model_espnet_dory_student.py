@@ -18,6 +18,16 @@ class ModifiedSTDCStage(nn.Sequential):
         )
 
 
+class DorySequentialStage(nn.Sequential):
+    """DORY-safe downsampling followed by strictly sequential refinements."""
+
+    def __init__(self, cin: int, cout: int, refinements: int):
+        super().__init__(
+            ConvBNReLU(cin, cout, kernel=3, stride=2),
+            *(DSConv(cout, cout) for _ in range(refinements)),
+        )
+
+
 class ESPNetDoryStudent(nn.Module):
     """2x160x160 frames -> corners, gate mask, and 10x10 danger logits."""
 
@@ -42,6 +52,45 @@ class ESPNetDoryStudent(nn.Module):
         )
         self.stage2 = ModifiedSTDCStage(32, 64, refinements=3)
         self.stage3 = ModifiedSTDCStage(64, 96, refinements=7)
+        self.danger_head = nn.Conv2d(96, 1, 1)
+
+    def encode(self, frames: torch.Tensor) -> torch.Tensor:
+        return self.stage1(self.stem(frames))
+
+    def forward(self, frames: torch.Tensor) -> dict[str, torch.Tensor]:
+        shared = self.encode(frames)
+        deep = self.stage3(self.stage2(shared))
+        return {
+            "corners": self.corner_head(shared),
+            "gate": self.gate_head(shared),
+            "danger": self.danger_head(deep),
+        }
+
+
+class DorySequentialStudent(nn.Module):
+    """Residual-free student restricted to reliable GAP8/DORY operators."""
+
+    input_shape = ESPNetDoryStudent.input_shape
+    shared_shape = ESPNetDoryStudent.shared_shape
+    corner_shape = ESPNetDoryStudent.corner_shape
+    gate_shape = ESPNetDoryStudent.gate_shape
+    danger_shape = ESPNetDoryStudent.danger_shape
+
+    def __init__(self):
+        super().__init__()
+        self.stem = nn.Sequential(
+            ConvBNReLU(2, 16, kernel=3, stride=2),
+            DSConv(16, 16),
+        )
+        self.stage1 = DorySequentialStage(16, 32, refinements=2)
+        self.corner_head = nn.Sequential(
+            DSConv(32, 16), nn.Conv2d(16, 4, 1)
+        )
+        self.gate_head = nn.Sequential(
+            DSConv(32, 16), nn.Conv2d(16, 1, 1)
+        )
+        self.stage2 = DorySequentialStage(32, 64, refinements=2)
+        self.stage3 = DorySequentialStage(64, 96, refinements=4)
         self.danger_head = nn.Conv2d(96, 1, 1)
 
     def encode(self, frames: torch.Tensor) -> torch.Tensor:
@@ -93,7 +142,15 @@ class DangerHeadGraph(nn.Module):
         return self.head(self.stage3(self.stage2(shared)))
 
 
-def deployment_graphs(model: ESPNetDoryStudent):
+def build_student(architecture: str):
+    if architecture == "ESPNetDoryStudent":
+        return ESPNetDoryStudent()
+    if architecture == "DorySequentialStudent":
+        return DorySequentialStudent()
+    raise ValueError(f"unsupported student architecture: {architecture}")
+
+
+def deployment_graphs(model: ESPNetDoryStudent | DorySequentialStudent):
     return {
         "encoder": EncoderGraph(model),
         "corner_head": FineHeadGraph(model.corner_head),

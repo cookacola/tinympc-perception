@@ -31,5 +31,6 @@ python gap8_perception/train_espnet_dory_student.py \
   --obstacle-checkpoint "$WORKSPACE/tinympc_event_aligned_finalists_20260816/espnetv2_lite_spatial_gate_finetune_seed270202/espnetv2_lite_spatial_gate_finetune.pt" \
   --gate-checkpoint "$WORKSPACE/newbeedrone_joint_espnet_middle_finetune/best.pt" \
   --teacher-checkpoint "$TEACHER" --output "$OUTPUT" \
+  --architecture "${ARCHITECTURE:-ESPNetDoryStudent}" \
   --epochs "${EPOCHS:-15}" --batch-size 32 \
   --workers "${SLURM_CPUS_PER_TASK:-8}"

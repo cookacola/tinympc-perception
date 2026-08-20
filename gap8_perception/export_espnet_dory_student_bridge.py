@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 from gap8_perception.model_espnet_dory_student import (
-    ESPNetDoryStudent,
+    build_student,
     deployment_graphs,
 )
 
@@ -23,9 +23,8 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    if checkpoint.get("architecture") != "ESPNetDoryStudent":
-        raise RuntimeError("checkpoint is not an ESPNetDoryStudent")
-    model = ESPNetDoryStudent().eval()
+    architecture = checkpoint.get("architecture")
+    model = build_student(architecture).eval()
     model.load_state_dict(checkpoint["model"], strict=True)
     shapes = {
         "encoder": ([2, 160, 160], [32, 40, 40]),

@@ -22,7 +22,7 @@ from torch.utils.data import ConcatDataset, DataLoader
 import gap8_perception as _gap8_package
 _gap8_package.__path__.append(str(TRAINING_REPO / "gap8_perception"))
 from gap8_perception.losses import soft_dice_loss, weighted_corner_mse
-from gap8_perception.model_espnet_dory_student import ESPNetDoryStudent
+from gap8_perception.model_espnet_dory_student import build_student
 
 from gap8_perception.data import MultiTaskDataset  # noqa: E402
 from gap8_perception.evaluate import local_centroid  # noqa: E402
@@ -258,6 +258,11 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260819)
+    parser.add_argument(
+        "--architecture",
+        choices=("ESPNetDoryStudent", "DorySequentialStudent"),
+        default="ESPNetDoryStudent",
+    )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     random.seed(args.seed)
@@ -274,7 +279,7 @@ def main():
         args.teacher_checkpoint, map_location=device, weights_only=False
     )["model"])
     teacher.eval().requires_grad_(False)
-    model = ESPNetDoryStudent().to(device)
+    model = build_student(args.architecture).to(device)
 
     obstacle = {
         split: TemporalHorizonDataset(
@@ -351,7 +356,7 @@ def main():
         print(json.dumps(record), flush=True)
         state = {
             "epoch": epoch, "model": model.state_dict(), "record": record,
-            "architecture": "ESPNetDoryStudent", "teacher": str(args.teacher_checkpoint),
+            "architecture": args.architecture, "teacher": str(args.teacher_checkpoint),
         }
         torch.save(state, args.output / "last.pt")
         torch.save(state, args.output / f"epoch_{epoch:03d}.pt")
@@ -366,7 +371,7 @@ def main():
     )
     summary = {
         "selected_epoch": selected["epoch"],
-        "architecture": "ESPNetDoryStudent",
+        "architecture": args.architecture,
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "teacher": str(args.teacher_checkpoint),
         "history": history,
