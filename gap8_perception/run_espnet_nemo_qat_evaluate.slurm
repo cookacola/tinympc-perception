@@ -13,9 +13,9 @@ REPO=/home/cchen/gap8-drone-racing-perception
 TRAINING_REPO=/home/cchen/tinympc-gate-texture
 WORKSPACE=/home/cchen/isaacsim-workspace/workspace
 DATASET=$WORKSPACE/tinympc_event_aligned_dataset_20260816
-OUTPUT=$WORKSPACE/espnet_dory_student_v2_qat_deployment
+OUTPUT=${OUTPUT:-$WORKSPACE/espnet_dory_student_v2_qat_deployment}
 PTQ_OUTPUT=$WORKSPACE/espnet_dory_student_v2_deployment
-QAT=$WORKSPACE/espnet_dory_student_v2_qat
+QAT=${QAT:-$WORKSPACE/espnet_dory_student_v2_qat}
 GATE_DATASET=$WORKSPACE/newbeedrone_multi_course_gate_v2_20k
 GATE_TARGETS=$WORKSPACE/newbeedrone_multi_course_gate_v2_targets
 NO_GATE=$WORKSPACE/newbeedrone_multi_course_no_gate_v2_5k
@@ -44,6 +44,7 @@ PYTHONPATH=. /home/cchen/isaacsim-env/bin/python \
   --real-root /home/cchen/real_flight_data \
   --obstacle-checkpoint "$OBSTACLE_CHECKPOINT" \
   --gate-checkpoint "$GATE_CHECKPOINT" --teacher-checkpoint "$TEACHER" \
-  --output "$OUTPUT/integer_ground_truth.json"
+  --output "$OUTPUT/integer_ground_truth.json" \
+  --maximum-per-dataset "${EVAL_MAX:-0}"
 
 echo "QAT integer evaluation completed at: $(date)"

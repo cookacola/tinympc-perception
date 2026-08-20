@@ -6,12 +6,14 @@ from __future__ import print_function
 import argparse
 import copy
 import json
+import math
 from pathlib import Path
 
 import cv2
 import nemo
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from gap8_perception.nemo_espnet_dory_student_export import (
@@ -50,10 +52,71 @@ class PairImages(Dataset):
         return torch.from_numpy(np.stack(frames)).float() / 255.0
 
 
+def evenly_sample(values, count):
+    if count <= 0 or len(values) <= count:
+        return list(values)
+    indices = np.linspace(0, len(values) - 1, count).astype(int)
+    return [values[index] for index in indices]
+
+
+def static_pairs(root, shards):
+    paths = []
+    for shard in shards:
+        paths.extend(sorted((root / shard).glob("hm01b0_mono_*.png")))
+    if not paths:
+        raise RuntimeError("no static HM01B0 frames in %s" % root)
+    return [(path, path) for path in paths]
+
+
+def labeled_real_pairs(root):
+    pairs = []
+    for flight in ("flight_06", "flight_07"):
+        folder = root / flight
+        labels = folder / "labels.jsonl"
+        if not labels.is_file():
+            continue
+        for line in labels.read_text().splitlines():
+            if not line:
+                continue
+            path = folder / "stream_out" / json.loads(line)["image"]
+            if path.is_file():
+                pairs.append((path, path))
+    if not pairs:
+        raise RuntimeError("no labeled real HM01B0 frames in %s" % root)
+    return pairs
+
+
+def representative_pairs(obstacle, static_sources, real_root, limit):
+    groups = [("obstacle_temporal", obstacle)]
+    groups.extend(
+        (name, static_pairs(root, shards))
+        for name, root, shards in static_sources
+    )
+    if real_root is not None:
+        groups.append(("labeled_real", labeled_real_pairs(real_root)))
+    per_group = int(math.ceil(float(limit) / len(groups))) if limit else 0
+    selected = []
+    counts = {}
+    for name, values in groups:
+        sampled = evenly_sample(values, per_group)
+        selected.extend(sampled)
+        counts[name] = len(sampled)
+    if limit:
+        selected = evenly_sample(selected, min(limit, len(selected)))
+    return selected, counts
+
+
 def configure_adds(model, factor):
     for module in model.modules():
         if hasattr(module, "requantization_factor"):
             module.requantization_factor = factor
+
+
+def freeze_batchnorm_statistics(model):
+    """Keep QAT consistent with the folded inference graph DORY executes."""
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm2d):
+            module.eval()
 
 
 def build(graph, bridge):
@@ -100,6 +163,7 @@ def shift_terminal_activation(model, encoder, calibration, batch_size):
         model.output_proj[1].bias.copy_(
             torch.from_numpy(offset).to(model.output_proj[1].bias)
         )
+    return offset
 
 
 def main():
@@ -115,20 +179,56 @@ def main():
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--calibration-images", type=int, default=256)
     parser.add_argument("--train-limit", type=int, default=4096)
+    parser.add_argument("--gate-dataset", type=Path)
+    parser.add_argument("--gate-split-file", type=Path)
+    parser.add_argument("--no-gate-dataset", type=Path)
+    parser.add_argument("--paired-no-gate-dataset", type=Path)
+    parser.add_argument(
+        "--real-root", type=Path,
+        help="Labeled real-flight root; flight_06/07 frames are used and duplicated.",
+    )
     parser.add_argument("--residual-requantization-factor", type=int, default=1)
     args = parser.parse_args()
+    torch.manual_seed(20260819)
+    np.random.seed(20260819)
     args.output.mkdir(parents=True, exist_ok=True)
-    pairs = temporal_pairs(args.dataset, "train")
-    if args.train_limit and len(pairs) > args.train_limit:
-        indices = np.linspace(0, len(pairs) - 1, args.train_limit).astype(int)
-        pairs = [pairs[index] for index in indices]
-    calibration = pairs[:min(args.calibration_images, len(pairs))]
+    obstacle_pairs = temporal_pairs(args.dataset, "train")
+    static_sources = []
+    if args.gate_dataset is not None:
+        if args.gate_split_file is None:
+            raise RuntimeError("--gate-dataset requires --gate-split-file")
+        gate_split = json.loads(args.gate_split_file.read_text())
+        static_sources.append(
+            ("synthetic_gate", args.gate_dataset, gate_split["train"])
+        )
+    if args.no_gate_dataset is not None:
+        static_sources.append((
+            "synthetic_no_gate", args.no_gate_dataset,
+            ["shard_%09d" % (index * 1000) for index in range(3)],
+        ))
+    if args.paired_no_gate_dataset is not None:
+        static_sources.append((
+            "paired_no_gate", args.paired_no_gate_dataset,
+            ["shard_%09d" % (index * 1000) for index in range(16)],
+        ))
+    pairs, source_counts = representative_pairs(
+        obstacle_pairs, static_sources, args.real_root, args.train_limit
+    )
+    calibration = evenly_sample(
+        pairs, min(args.calibration_images, len(pairs))
+    )
     base, encoder, shape = build(args.graph, args.bridge)
+    base.eval()
+    output_offset = None
+    learned_bias = None
     if encoder is not None:
-        shift_terminal_activation(base, encoder, calibration, args.batch_size)
+        learned_bias = base.output_proj[1].bias.detach().cpu().numpy().copy()
+        output_offset = shift_terminal_activation(
+            base, encoder, calibration, args.batch_size
+        )
     teacher = copy.deepcopy(base).eval()
     student = nemo.transform.quantize_pact(
         base, dummy_input=torch.ones(1, *shape)
@@ -153,8 +253,10 @@ def main():
     )
     optimizer = torch.optim.Adam(student.parameters(), lr=args.learning_rate)
     history = []
+    best_loss = None
     for epoch in range(1, args.epochs + 1):
         student.train()
+        freeze_batchnorm_statistics(student)
         total = 0.0
         examples = 0
         for images in loader:
@@ -178,11 +280,28 @@ def main():
             "precision_bits": 8,
             "residual_requantization_factor": args.residual_requantization_factor,
             "source_bridge": str(args.bridge),
+            "output_offset": (
+                output_offset.tolist() if output_offset is not None else None
+            ),
+            "learned_bias": (
+                learned_bias.tolist() if learned_bias is not None else None
+            ),
+            "representative_source_counts": source_counts,
+            "calibration_examples": len(calibration),
+            "training_examples": len(pairs),
+            "epoch": epoch,
+            "distillation_loss": metric["distillation_loss"],
         }
         torch.save(
-            checkpoint, str(args.output / (args.graph + "_qat.pt")),
+            checkpoint, str(args.output / (args.graph + "_qat_last.pt")),
             _use_new_zipfile_serialization=False,
         )
+        if best_loss is None or metric["distillation_loss"] < best_loss:
+            best_loss = metric["distillation_loss"]
+            torch.save(
+                checkpoint, str(args.output / (args.graph + "_qat.pt")),
+                _use_new_zipfile_serialization=False,
+            )
         print(json.dumps(metric), flush=True)
     (args.output / (args.graph + "_qat_history.json")).write_text(
         json.dumps(history, indent=2) + "\n"

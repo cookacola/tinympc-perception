@@ -92,7 +92,10 @@ for graph in encoder corner_head gate_head danger_head; do
   make clean
   make all run platform=gvsoc CORE=7 DORY_CHECKSUM_HARNESS=1 \
     2>&1 | tee "$OUTPUT/${graph}_gvsoc_checksum.log"
-  ! grep -q 'Checksum Failed' "$OUTPUT/${graph}_gvsoc_checksum.log"
+  if grep -q 'Checksum Failed' "$OUTPUT/${graph}_gvsoc_checksum.log"; then
+    echo "GVSOC checksum mismatch in $graph" >&2
+    exit 3
+  fi
   grep -q 'Checking layer: Checksum OK' "$OUTPUT/${graph}_gvsoc_checksum.log"
 done
 

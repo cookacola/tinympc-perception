@@ -239,7 +239,7 @@ def configure_residual_requantization(model, factor):
 
 def load_qat_checkpoint(model, checkpoint_path, graph_name):
     if checkpoint_path is None:
-        return False
+        return None
     checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
     if checkpoint.get("graph") != graph_name:
         raise RuntimeError(
@@ -249,7 +249,7 @@ def load_qat_checkpoint(model, checkpoint_path, graph_name):
     if checkpoint.get("precision_bits") != 8:
         raise RuntimeError("QAT checkpoint is not int8")
     model.load_state_dict(checkpoint["model"])
-    return True
+    return checkpoint
 
 
 def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
@@ -268,7 +268,7 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
             model(image_tensor(calibration_paths[start : start + 32]))
     model.unset_statistics_act()
     model.reset_alpha_act()
-    qat_loaded = load_qat_checkpoint(model, qat_checkpoint, "encoder")
+    qat_state = load_qat_checkpoint(model, qat_checkpoint, "encoder")
     residual_adds = configure_residual_requantization(model, add_factor)
     model.qd_stage(eps_in=1.0 / 255.0)
     model.id_stage()
@@ -305,7 +305,7 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
         "integer_layers": layers,
         "residual_adds_configured": residual_adds,
         "residual_requantization_factor": add_factor,
-        "qat_checkpoint": str(qat_checkpoint) if qat_loaded else None,
+        "qat_checkpoint": str(qat_checkpoint) if qat_state is not None else None,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,
         "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
@@ -361,7 +361,30 @@ def quantize_head(
             model(shared)
     model.unset_statistics_act()
     model.reset_alpha_act()
-    qat_loaded = load_qat_checkpoint(model, qat_checkpoint, name)
+    qat_state = load_qat_checkpoint(model, qat_checkpoint, name)
+    qat_offset_source = None
+    if qat_state is not None:
+        # The unsigned DORY graph is trained after translating its terminal
+        # logits into the positive domain.  Decoding must subtract the exact
+        # translation used during QAT, not a newly estimated PTQ translation.
+        # Older checkpoints predate the explicit metadata; their terminal BN
+        # bias is an accurate fallback because the QAT learning rate was tiny.
+        if "output_offset" in qat_state:
+            offset = np.asarray(qat_state["output_offset"], np.float64)
+            qat_offset_source = "checkpoint_metadata"
+        else:
+            key = "output_proj.1.bias"
+            if key not in qat_state["model"]:
+                raise RuntimeError("legacy QAT checkpoint has no terminal bias")
+            offset = qat_state["model"][key].detach().cpu().numpy().astype(
+                np.float64
+            )
+            qat_offset_source = "legacy_terminal_bias_fallback"
+        if offset.shape != (model.output_channels,):
+            raise RuntimeError(
+                "QAT output offset shape mismatch: %r != %r"
+                % (offset.shape, (model.output_channels,))
+            )
     residual_adds = configure_residual_requantization(model, add_factor)
     model.qd_stage(eps_in=encoder_epsilon)
     model.id_stage()
@@ -444,7 +467,8 @@ def quantize_head(
         "integer_layers": layers,
         "residual_adds_configured": residual_adds,
         "residual_requantization_factor": add_factor,
-        "qat_checkpoint": str(qat_checkpoint) if qat_loaded else None,
+        "qat_checkpoint": str(qat_checkpoint) if qat_state is not None else None,
+        "qat_offset_source": qat_offset_source,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,
         "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(

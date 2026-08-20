@@ -116,6 +116,13 @@ def sampled(values, count):
     return [values[index] for index in indices]
 
 
+def qat_checkpoint(directory, graph):
+    if directory is None:
+        return None
+    path = directory / (graph + "_qat.pt")
+    return path if path.is_file() else None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bridge", type=Path, required=True)
@@ -137,9 +144,7 @@ def main():
     encoder_integer, encoder_float, encoder_report = base.quantize_encoder(
         encoder, calibration, parity, args.output / "encoder",
         args.residual_requantization_factor,
-        qat_checkpoint=(
-            args.qat_directory / "encoder_qat.pt" if args.qat_directory else None
-        ),
+        qat_checkpoint=qat_checkpoint(args.qat_directory, "encoder"),
     )
     reports = [encoder_report]
     for name, model in (
@@ -152,10 +157,7 @@ def main():
             name, model, encoder_integer, encoder_float,
             encoder_report["output_epsilon"], calibration, parity,
             args.output / name, args.residual_requantization_factor,
-            qat_checkpoint=(
-                args.qat_directory / (name + "_qat.pt")
-                if args.qat_directory else None
-            ),
+            qat_checkpoint=qat_checkpoint(args.qat_directory, name),
         ))
     report = {
         "format": "espnet-dory-student-nemo-v1",
