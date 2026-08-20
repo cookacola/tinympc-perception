@@ -24,6 +24,41 @@ from gap8_perception.nemo_stdc_dory_export import (
 )
 
 
+def set_pulp_int8_precision(model, signed_weight_bits=7):
+    """Set uint8 activations and a PACT signed-weight precision."""
+    model.change_precision(
+        bits=8, scale_weights=False, scale_activations=True
+    )
+    model.change_precision(
+        bits=signed_weight_bits, scale_weights=True, scale_activations=False
+    )
+
+
+def canonicalize_batchnorm_affine(model):
+    """Exactly fold BN scale into Conv, leaving a bias-only canonical BN."""
+    converted = 0
+    with torch.no_grad():
+        for parent in model.modules():
+            children = list(parent.children())
+            for convolution, batchnorm in zip(children[:-1], children[1:]):
+                if not isinstance(convolution, nn.Conv2d):
+                    continue
+                if not isinstance(batchnorm, nn.BatchNorm2d):
+                    continue
+                denominator = torch.sqrt(batchnorm.running_var + batchnorm.eps)
+                multiplier = batchnorm.weight / denominator
+                bias = batchnorm.bias - multiplier * batchnorm.running_mean
+                convolution.weight.mul_(
+                    multiplier.view(-1, 1, 1, 1).to(convolution.weight)
+                )
+                batchnorm.weight.fill_((1.0 + batchnorm.eps) ** 0.5)
+                batchnorm.bias.copy_(bias)
+                batchnorm.running_mean.zero_()
+                batchnorm.running_var.fill_(1.0)
+                converted += 1
+    return converted
+
+
 class EncoderNet(nn.Module):
     def __init__(self):
         super(EncoderNet, self).__init__()
@@ -191,7 +226,12 @@ def save_integer_fixture(model, integer_input, output, input_hwc):
     golden = []
     hooks = []
     for module in model.modules():
-        if module.__class__.__name__ in ("PACT_Act", "PACT_IntegerAct"):
+        # DORY lowers pooling to its own hardware node.  Record that node's
+        # activation in execution order as well as NeMO's quantized activation
+        # nodes, otherwise a head that contains pooling has fewer golden files
+        # than the generated DORY graph.
+        module_name = module.__class__.__name__
+        if module_name in ("PACT_Act", "PACT_IntegerAct") or "Pool" in module_name:
             hooks.append(
                 module.register_forward_hook(
                     lambda module, inputs, value: golden.append(value.detach())
@@ -253,14 +293,15 @@ def load_qat_checkpoint(model, checkpoint_path, graph_name):
 
 
 def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
-                     qat_checkpoint=None):
+                     qat_checkpoint=None, bn_calibration_range_factor=8,
+                     calibrate_batchnorm=False, signed_weight_bits=7):
     output.mkdir(parents=True, exist_ok=True)
     model.eval()
     model_float = copy.deepcopy(model).eval()
     model = nemo.transform.quantize_pact(
         model, dummy_input=torch.ones(1, *model.input_shape)
     )
-    model.change_precision(bits=8)
+    set_pulp_int8_precision(model, signed_weight_bits)
     model.reset_alpha_weights()
     model.set_statistics_act()
     with torch.no_grad():
@@ -270,7 +311,17 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
     model.reset_alpha_act()
     qat_state = load_qat_checkpoint(model, qat_checkpoint, "encoder")
     residual_adds = configure_residual_requantization(model, add_factor)
-    model.qd_stage(eps_in=1.0 / 255.0)
+    def calibration_forward():
+        with torch.no_grad():
+            for start in range(0, len(calibration_paths), 32):
+                model(image_tensor(calibration_paths[start:start + 32]))
+
+    model.qd_stage(
+        eps_in=1.0 / 255.0,
+        prune_empty_bn=False,
+        bn_calibration_range_factor=bn_calibration_range_factor,
+        bn_calibration_fn=(calibration_forward if calibrate_batchnorm else None),
+    )
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
     integer_input = image_tensor(calibration_paths[:1]) * 255.0
@@ -305,7 +356,11 @@ def quantize_encoder(model, calibration_paths, parity_paths, output, add_factor,
         "integer_layers": layers,
         "residual_adds_configured": residual_adds,
         "residual_requantization_factor": add_factor,
+        "bn_calibration_range_factor": bn_calibration_range_factor,
+        "data_driven_batchnorm_calibration": calibrate_batchnorm,
         "qat_checkpoint": str(qat_checkpoint) if qat_state is not None else None,
+        "activation_bits": 8,
+        "signed_weight_bits": signed_weight_bits,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,
         "onnx_int8_convolution_weights": verify_onnx_int8_convolution_weights(
@@ -325,6 +380,9 @@ def quantize_head(
     output,
     add_factor,
     qat_checkpoint=None,
+    bn_calibration_range_factor=8,
+    calibrate_batchnorm=False,
+    signed_weight_bits=7,
 ):
     output.mkdir(parents=True, exist_ok=True)
     model.eval()
@@ -350,7 +408,7 @@ def quantize_head(
         model,
         dummy_input=torch.ones(1, *model.input_shape),
     )
-    model.change_precision(bits=8)
+    set_pulp_int8_precision(model, signed_weight_bits)
     model.reset_alpha_weights()
     model.set_statistics_act()
     with torch.no_grad():
@@ -386,12 +444,36 @@ def quantize_head(
                 % (offset.shape, (model.output_channels,))
             )
     residual_adds = configure_residual_requantization(model, add_factor)
-    model.qd_stage(eps_in=encoder_epsilon)
+    def calibration_forward():
+        with torch.no_grad():
+            for start in range(0, len(calibration_paths), 32):
+                images = image_tensor(calibration_paths[start:start + 32]) * 255.0
+                # The QD head consumes physical (dequantized) feature values.
+                shared = encoder_integer(images) * encoder_epsilon
+                model(shared)
+
+    model.qd_stage(
+        eps_in=encoder_epsilon,
+        prune_empty_bn=False,
+        bn_calibration_range_factor=bn_calibration_range_factor,
+        bn_calibration_fn=(calibration_forward if calibrate_batchnorm else None),
+    )
     model.id_stage()
     weight_report = bound_int8_convolution_weights(model)
-    image = image_tensor(calibration_paths[:1]) * 255.0
+    # A terminal ReLU can legitimately produce zero for some examples after
+    # translating signed logits into DORY's unsigned output domain. Select a
+    # deterministic nonzero checksum fixture rather than treating the first
+    # calibration example as special.
+    integer_shared = None
     with torch.no_grad():
-        integer_shared = encoder_integer(image)
+        for path in calibration_paths:
+            image = image_tensor([path]) * 255.0
+            candidate = encoder_integer(image)
+            if int((model(candidate) != 0).sum()) > 0:
+                integer_shared = candidate
+                break
+    if integer_shared is None:
+        raise RuntimeError("%s has no nonzero integer calibration fixture" % name)
     input_hwc = integer_shared[0].permute(1, 2, 0).numpy()
     integer_output, layers = save_integer_fixture(
         model, integer_shared, output, input_hwc
@@ -467,7 +549,11 @@ def quantize_head(
         "integer_layers": layers,
         "residual_adds_configured": residual_adds,
         "residual_requantization_factor": add_factor,
+        "bn_calibration_range_factor": bn_calibration_range_factor,
+        "data_driven_batchnorm_calibration": calibrate_batchnorm,
         "qat_checkpoint": str(qat_checkpoint) if qat_state is not None else None,
+        "activation_bits": 8,
+        "signed_weight_bits": signed_weight_bits,
         "qat_offset_source": qat_offset_source,
         "parity_images": len(parity_paths),
         "weight_quantization": weight_report,

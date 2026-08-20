@@ -1,0 +1,37 @@
+--- a/dory/Frontend_frameworks/NEMO/Parser.py
++++ b/dory/Frontend_frameworks/NEMO/Parser.py
+@@ -124,12 +124,18 @@
+     def add_data_layout(self):
+         print("\nNEMO Frontend: Adding Data Layout.")
+         for i, node in enumerate(self.DORY_Graph):
++            # Pooling nodes have no weights. Keep the sentinel local to each
++            # node so a preceding convolution's constant name cannot leak
++            # into a GlobalAveragePool/AveragePool node (or be undefined when
++            # pooling is the first mapped node in a split deployment graph).
++            weights_name = None
+             for name in node.constant_names:
+                 if name not in ["l","k","outshift","outmul", "inmul1", "inmul2"]:
+                     if "bias" not in name:
+                         weights_name = name
+-            if weights_name in node.__dict__:
++            if weights_name is not None and weights_name in node.__dict__:
+                 if node.name in "FullyConnected":
+                     if node.__dict__[weights_name]["value"].shape[0] == node.input_channels:
+                         node.__dict__[weights_name]["layout"] = "CinCout"
+--- a/dory/Hardware_targets/PULP/Common/Tiler/tiler_pool2d.py
++++ b/dory/Hardware_targets/PULP/Common/Tiler/tiler_pool2d.py
+@@ -58,7 +58,13 @@
+         s = self.HW_node.strides
+         p = self.HW_node.pads
+ 
+-        if self.previous_HW_node.tiling_dimensions["L2"]["output_dimensions"] != self.previous_HW_node.tiling_dimensions["L3"]["output_dimensions"]:
++        previous_l2_output = self.previous_HW_node.tiling_dimensions["L2"]["output_dimensions"]
++        previous_l3_output = self.previous_HW_node.tiling_dimensions["L3"]["output_dimensions"]
++        # A standalone head may legitimately begin with pooling.  In that case
++        # DORY passes the pooling node itself as previous_HW_node and its L2
++        # output tiling has not been populated yet.  The graph input is already
++        # an L2 tensor, so it does not require L3 input tiling.
++        if previous_l2_output is not None and previous_l2_output != previous_l3_output:
+             input_L3 = 1
+             self.HW_node.L3_input = 1
+             input_dim_constraint = int(self.previous_HW_node.tiling_dimensions["L2"]["output_activation_memory"])

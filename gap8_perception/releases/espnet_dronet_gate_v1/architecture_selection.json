@@ -1,0 +1,83 @@
+{
+  "format": "tinympc-perception-architecture-selection-v1",
+  "selected": "espnet_two_frame_middle_heatmap_mask",
+  "selection_policy": "validation-only architecture and seed selection, then MAC-aware held-out comparison",
+  "selected_seed": 2027,
+  "selected_epoch": 30,
+  "gate_tap": "middle_stage2",
+  "corner_representation": "four heatmaps",
+  "gate_representation": "binary mask",
+  "confidence": "logistic fusion of presence, mask peak, and corner peak quality",
+  "models": {
+    "espnet_selected_float": {
+      "parameters": 108374,
+      "deployment_macs_160x160": 26275200,
+      "navigation_test": {
+        "yaw_rmse": 0.35007839368927013,
+        "collision_bce": 0.613364489564144,
+        "collision_auroc": 0.8951692266554447,
+        "collision_ap": 0.8479284091729625
+      },
+      "gate_test": {
+        "gate_iou": 0.8073607476082746,
+        "corner_mean_px": 4.2197957038879395,
+        "real_corner_mean_px": 23.318193435668945,
+        "structured_confidence_auroc": 0.926166696412636
+      }
+    },
+    "espnet_selected_integer_exact": {
+      "parameters": 108374,
+      "deployment_macs_160x160": 26275200,
+      "gvsoc_exact_graphs": 5,
+      "navigation_output_postprocess_multiply_adds": 2,
+      "navigation_test": {
+        "yaw_rmse": 0.3774808601408204,
+        "collision_bce": 0.6009021971104869,
+        "collision_auroc": 0.7764026239884976,
+        "collision_ap": 0.6599841543519558
+      },
+      "gate_test": {
+        "gate_iou": 0.6084342911071674,
+        "corner_mean_px": 6.556253028458691,
+        "real_corner_mean_px": 24.17022870837879,
+        "structured_confidence_auroc": 0.8925840323636147
+      }
+    },
+    "dronetv3_joint_gate_control": {
+      "parameters": 58934,
+      "deployment_macs_160x160": 21102992,
+      "navigation_test": {
+        "yaw_rmse": 0.3657650124454973,
+        "collision_bce": 0.589995326624922,
+        "collision_auroc": 0.8821791466119601,
+        "collision_ap": 0.8449294554001414
+      },
+      "gate_test": {
+        "gate_iou": 0.45912757997607717,
+        "corner_mean_px": 11.791938781738281,
+        "real_corner_mean_px": 24.081926345825195,
+        "presence_auroc": 0.8699662777798051
+      }
+    }
+  },
+  "compute_tradeoff": {
+    "extra_macs": 5172208,
+    "extra_macs_fraction": 0.2451002227219582,
+    "gate_iou_absolute_gain": 0.34823316763219744,
+    "gate_iou_relative_gain": 0.7585891961793764,
+    "corner_error_reduction_fraction": 0.6421474108758925,
+    "exact_integer_gate_iou_relative_gain_vs_dronet_float_control": 0.3252021854487166,
+    "exact_integer_corner_error_reduction_vs_dronet_float_control": 0.4440054756026995,
+    "conclusion": "Select ESPNet for the gate-centric multitask release: its exact integer deployment costs 24.5% more MACs than the joint DroNet control while retaining a 32.5% gate-IoU gain and 44.4% lower synthetic corner error. Calibrated yaw RMSE and collision BCE remain close, but integer collision ranking is weaker and is recorded as a deployment limitation."
+  },
+  "three_seed_espnet_mean": {
+    "yaw_rmse": 0.36824925154663984,
+    "collision_bce": 0.5961728534451202,
+    "collision_auroc": 0.8761506798874306,
+    "collision_ap": 0.8267098490529716,
+    "gate_iou": 0.8017162319585667,
+    "corner_mean_px": 4.29819901784261,
+    "real_corner_mean_px": 21.823816935221355,
+    "structured_confidence_auroc": 0.9287644317528309
+  }
+}
