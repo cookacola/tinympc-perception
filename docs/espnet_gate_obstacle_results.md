@@ -38,10 +38,11 @@ student and passing the same validation-selected held-out safety gate.
 ## GAP8 generated-C gate
 
 DORY parsing and L1 tiling pass for all four graphs. GVSOC generated-C parity
-passes for the corner and gate-mask heads. It does not pass for the deployable
-network: the danger branch disagrees from its first stride-2 depthwise layer,
-and the encoder repeatedly fails to terminate in GVSOC. Consequently no
-firmware package is promoted as deployment-ready. The pushed NanoCockpit
-integration and packaging workflow remain useful, but the next compact student
-must avoid or repair these unsupported generated-kernel paths and then repeat
-the integer task evaluation.
+passes for the corner and gate-mask heads. The initial encoder non-termination
+was caused by an undersized 180 KB L2 activation arena; at 260 KB it completes
+and its convolutional layers pass. It then diverges at the first quantized
+residual add because generated C drops the layer's post-add multiplier. The
+danger branch separately disagrees from its first stride-2 depthwise layer.
+Consequently no firmware package is promoted as deployment-ready. The next
+compact student must avoid or repair these unsupported generated-kernel paths
+and then repeat the integer task evaluation.
