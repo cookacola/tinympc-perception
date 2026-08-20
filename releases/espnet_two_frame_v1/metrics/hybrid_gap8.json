@@ -1,0 +1,58 @@
+{
+  "format": "tinympc-espnet-gap8-hybrid-metrics-v1",
+  "network_name": "gap8-espnet-dory-student-v2-hybrid-qat",
+  "composition": {
+    "encoder": "QAT",
+    "danger_head": "QAT",
+    "corner_head": "PTQ",
+    "gate_head": "PTQ"
+  },
+  "input": {
+    "shape_hwc": [160, 160, 2],
+    "dtype": "uint8",
+    "channel_order": ["previous", "current"]
+  },
+  "thresholds": {
+    "danger_probability": 0.771385133266449,
+    "danger_uint8": 216,
+    "gate_probability": 0.5,
+    "gate_uint8": 214,
+    "corner_uint8": [191, 220, 201, 172]
+  },
+  "integer_obstacle_test": {
+    "examples": 3814,
+    "collision_positive_count": 358,
+    "danger_iou_at_0_5": 0.693281643468443,
+    "collision_auroc": 0.9071164390647631,
+    "collision_ap": 0.46003018897997605,
+    "collision_recall": 0.9916201117318436,
+    "collision_false_positive_rate": 0.47193287037037035
+  },
+  "integer_gate_test": {
+    "synthetic_examples": 2000,
+    "negative_examples": 3000,
+    "real_examples": 3603,
+    "gate_iou": 0.5784990997663223,
+    "synthetic_corner_mean_px": 7.031450869646316,
+    "synthetic_corner_p95_px": 53.358546829223634,
+    "real_corner_mean_px": 22.63835573919601,
+    "real_corner_p95_px": 92.91644821166979,
+    "negative_mask_pixel_rate": 0.0011333333333333334
+  },
+  "verification": {
+    "nemo_to_gvsoc_layer_checksums_passed": 52,
+    "nemo_to_gvsoc_layer_checksums_total": 52,
+    "nanocockpit_firmware_compiled": true,
+    "nanocockpit_firmware_linked": true
+  },
+  "nanocockpit": {
+    "repository": "git@github.com:cookacola/tinympc-nanocockpit.git",
+    "branch": "agent/espnet-nemo-dory",
+    "source_commit": "b619f4e0c5e6917b813160572c4b48f9586838b6",
+    "package_path": "src/gap/examples/tiny-racer/app/networks/gap8-espnet-dory-student-v2-hybrid-qat",
+    "package_git_tree_sha1": "a11716858d47202aafc62fb4cb332003ab1ea01c",
+    "package_files": 185,
+    "package_bytes": 880403,
+    "manifest_sha256": "fc1a70f285d35532bc4bc63f4b797624020b57d852684eff097550e6e0cbff5e"
+  }
+}
