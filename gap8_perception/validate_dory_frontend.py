@@ -43,6 +43,10 @@ def main():
     # Keep this default tied to the design contract instead of the legacy
     # 40x40 auxiliary-head tensor used by older graphs.
     parser.add_argument("--expected-output-bytes", type=int, default=12 * 15 * 20)
+    parser.add_argument(
+        "--l2-buffer-bytes", type=int, default=180000,
+        help="generated application activation arena; must fit GAP8 L2",
+    )
     args = parser.parse_args()
     # The 32-bit GAP8 kernel evaluates (k * convolution_sum) + lambda in
     # signed int32_t. The sequential student has a validated layer-12
@@ -245,13 +249,20 @@ def main():
             '  load_file_to_ram(ram_input, "gap8_inputs.hex");\n'
             "  ram_read(l2_buffer, ram_input, l2_input_size);\n"
             "#endif\n"
-            "  gap8_network_run(l2_buffer, 180000, l2_buffer, 0, initial_dir);\n"
+            f"  gap8_network_run(l2_buffer, {args.l2_buffer_bytes}, "
+            "l2_buffer, 0, initial_dir);\n"
             "#ifndef DORY_CHECKSUM_HARNESS\n"
             "  ram_free(ram_input, input_size);\n"
             "#endif",
         )
-        main_text = main_text.replace("pi_l2_malloc(417000)", "pi_l2_malloc(180000)")
-        main_text = main_text.replace("pi_l2_free(l2_buffer, 417000)", "pi_l2_free(l2_buffer, 180000)")
+        main_text = main_text.replace(
+            "pi_l2_malloc(417000)",
+            f"pi_l2_malloc({args.l2_buffer_bytes})",
+        )
+        main_text = main_text.replace(
+            "pi_l2_free(l2_buffer, 417000)",
+            f"pi_l2_free(l2_buffer, {args.l2_buffer_bytes})",
+        )
         main_source.write_text(main_text)
         write_checksum_input_source(args.app_dir)
         makefile = args.app_dir / "Makefile"

@@ -21,6 +21,9 @@ GAP_TOOLCHAIN=${GAP_TOOLCHAIN:-/home/cchen/gap_riscv_toolchain_ubuntu_18}
 declare -A BYTES=(
   [encoder]=51200 [corner_head]=6400 [gate_head]=1600 [danger_head]=100
 )
+declare -A L2_BYTES=(
+  [encoder]=260000 [corner_head]=180000 [gate_head]=180000 [danger_head]=180000
+)
 
 SCRATCH=$(mktemp -d "/tmp/espnet-dory-${GRAPH}-${SLURM_JOB_ID}-XXXXXX")
 trap 'rm -rf "$SCRATCH"' EXIT
@@ -30,7 +33,8 @@ PYTHONPATH=/home/cchen/dory /home/cchen/miniconda3/envs/dory/bin/python \
   --onnx "$OUTPUT/integer/$GRAPH/${GRAPH}_int.onnx" \
   --output "$OUTPUT/${GRAPH}_dory_report.json" \
   --app-dir "$OUTPUT/${GRAPH}_gap8_application" \
-  --expected-output-bytes "${BYTES[$GRAPH]}"
+  --expected-output-bytes "${BYTES[$GRAPH]}" \
+  --l2-buffer-bytes "${L2_BYTES[$GRAPH]}"
 
 source /home/cchen/miniconda3/etc/profile.d/conda.sh
 conda activate frontnet
