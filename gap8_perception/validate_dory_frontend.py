@@ -259,7 +259,7 @@ def main():
             makefile.read_text()
             + "\nDORY_CHECKSUM_HARNESS ?= 0\n"
             + "ifeq ($(DORY_CHECKSUM_HARNESS),1)\n"
-            + "APP_CFLAGS += -DDORY_CHECKSUM_HARNESS\n"
+            + "APP_CFLAGS += -DDORY_CHECKSUM_HARNESS -DVERBOSE\n"
             + "endif\n"
         )
         generated_files = [path for path in args.app_dir.rglob("*") if path.is_file()]

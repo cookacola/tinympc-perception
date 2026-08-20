@@ -45,7 +45,8 @@ set -u
 
 cd "$OUTPUT/${GRAPH}_gap8_application"
 make clean
-make all run platform=gvsoc CORE=7 DORY_CHECKSUM_HARNESS=1 \
+timeout "${GVSOC_TIMEOUT:-10m}" \
+  make all run platform=gvsoc CORE=7 DORY_CHECKSUM_HARNESS=1 \
   2>&1 | tee "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
 ! grep -q 'Checksum Failed' "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
 grep -q 'Checking layer: Checksum OK' "$OUTPUT/${GRAPH}_gvsoc_checksum.log"
