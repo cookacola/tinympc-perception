@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument("--minimum-epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--seed", type=int, default=20260904)
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     return parser.parse_args()
 
 
@@ -122,14 +123,17 @@ def main():
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     seed_everything(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type != "cuda":
-        raise RuntimeError("DORY TTC refinement requires a Slurm GPU allocation")
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available in this allocation")
+    if device.type == "cpu":
+        torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     train_set = TTCGateDataset(args.dataset, "train", augment=True)
     validation_set = TTCGateDataset(args.dataset, "validation")
     test_set = TTCGateDataset(args.dataset, "test")
     options = dict(
-        batch_size=args.batch_size, num_workers=args.workers, pin_memory=True,
+        batch_size=args.batch_size, num_workers=args.workers,
+        pin_memory=device.type == "cuda",
         persistent_workers=args.workers > 0,
     )
     train_loader = DataLoader(
