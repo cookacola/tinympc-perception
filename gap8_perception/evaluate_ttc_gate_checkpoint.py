@@ -21,6 +21,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--maximum-gate-distance-m", type=float, default=8.0)
+    parser.add_argument("--minimum-gate-span-px", type=float, default=16.0)
+    parser.add_argument("--minimum-gate-area-px2", type=float, default=256.0)
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type != "cuda":
@@ -31,15 +34,21 @@ def main():
         batch_size=args.batch_size, shuffle=False, num_workers=args.workers,
         pin_memory=True, persistent_workers=args.workers > 0,
     )
+    quality = dict(
+        maximum_gate_distance_m=args.maximum_gate_distance_m,
+        minimum_gate_span_px=args.minimum_gate_span_px,
+        minimum_gate_area_px2=args.minimum_gate_area_px2,
+    )
     result = {
         "checkpoint": str(args.checkpoint.resolve()),
         "initialization": initialization,
         "coordinate_decoder": "20x20_heatmap_peak_cell_center",
         "validation": evaluate(
-            model, DataLoader(TTCGateDataset(args.dataset, "validation"), **options), device
+            model, DataLoader(TTCGateDataset(args.dataset, "validation", **quality), **options),
+            device,
         ),
         "test": evaluate(
-            model, DataLoader(TTCGateDataset(args.dataset, "test"), **options), device
+            model, DataLoader(TTCGateDataset(args.dataset, "test", **quality), **options), device
         ),
     }
     args.output.write_text(json.dumps(finite_json(result), indent=2) + "\n")

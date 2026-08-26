@@ -39,15 +39,22 @@ def scan(model, dataset, device, batch_size, workers):
             coordinates = peak_gate_coordinates(output["gate_heatmap_logits"])
             truth = batch["gate_corners_px"].to(device, non_blocking=True)
             visible = batch["gate_corners_visible"].to(device, non_blocking=True).bool()
+            eligible = batch["gate_supervision_eligible"].bool()
             visibility_probability = output["gate_visibility_logits"].sigmoid()
             error = torch.linalg.vector_norm(coordinates - truth, dim=-1)
             for local in range(images.shape[0]):
+                if not bool(eligible[local]):
+                    continue
                 count = int(visible[local].sum())
                 mean_error = float(error[local][visible[local]].mean()) if count else 0.0
                 record = {
                     "visible_count": count,
                     "mean_visible_error_px": mean_error,
                     "mean_visibility_probability": float(visibility_probability[local].mean()),
+                    "gate_distance_m": float(batch["gate_distance_m"][local]),
+                    "gate_projected_width_px": float(batch["gate_projected_width_px"][local]),
+                    "gate_projected_height_px": float(batch["gate_projected_height_px"][local]),
+                    "gate_projected_area_px2": float(batch["gate_projected_area_px2"][local]),
                 }
                 index = offset + local
                 if count == 0:
@@ -107,7 +114,10 @@ def render(model, dataset, name, candidate, device, output_dir):
     banner = np.zeros((48, row.shape[1], 3), np.uint8)
     title = f"{name.replace('_', ' ')} | {sample['trajectory_type']} | visible {candidate['visible_count']}/4"
     probabilities = "/".join(f"{value:.2f}" for value in visibility)
-    detail = f"mean visible error {candidate['mean_visible_error_px']:.1f}px | q TL/TR/BR/BL {probabilities}"
+    detail = (
+        f"error {candidate['mean_visible_error_px']:.1f}px | "
+        f"distance {candidate['gate_distance_m']:.1f}m | q TL/TR/BR/BL {probabilities}"
+    )
     cv2.putText(banner, title, (5, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.43,
                 (255, 255, 255), 1, cv2.LINE_AA)
     cv2.putText(banner, detail, (5, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.36,
@@ -134,12 +144,20 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--maximum-gate-distance-m", type=float, default=8.0)
+    parser.add_argument("--minimum-gate-span-px", type=float, default=16.0)
+    parser.add_argument("--minimum-gate-area-px2", type=float, default=256.0)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type != "cuda":
         raise RuntimeError("render selection requires a Slurm GPU allocation")
-    dataset = TTCGateDataset(args.dataset, "test")
+    dataset = TTCGateDataset(
+        args.dataset, "test",
+        maximum_gate_distance_m=args.maximum_gate_distance_m,
+        minimum_gate_span_px=args.minimum_gate_span_px,
+        minimum_gate_area_px2=args.minimum_gate_area_px2,
+    )
     model = MotionConditionedESPNetGateTTCNet().to(device)
     initialization = model.initialize_from_checkpoint(args.checkpoint)
     model.eval()

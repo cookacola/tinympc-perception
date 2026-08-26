@@ -45,6 +45,9 @@ def parse_args():
     parser.add_argument("--minimum-epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--seed", type=int, default=20260828)
+    parser.add_argument("--maximum-gate-distance-m", type=float, default=8.0)
+    parser.add_argument("--minimum-gate-span-px", type=float, default=16.0)
+    parser.add_argument("--minimum-gate-area-px2", type=float, default=256.0)
     return parser.parse_args()
 
 
@@ -79,6 +82,7 @@ def finite_json(value):
 def move_batch(batch, device):
     keys = (
         "images", "onboard_state", "gate_corners_px", "gate_corners_visible",
+        "gate_supervision_eligible",
     )
     return {key: batch[key].to(device, non_blocking=True) for key in keys}
 
@@ -86,6 +90,8 @@ def move_batch(batch, device):
 def empty_metrics():
     return {
         "examples": 0,
+        "supervised_examples": 0,
+        "excluded_examples": 0,
         "loss_sum": 0.0,
         "parts": {},
         "visible_corners": 0,
@@ -120,8 +126,12 @@ def update_metrics(accumulator, prediction, target, loss, parts):
     soft_error = torch.linalg.vector_norm(
         soft_coordinates - target["gate_corners_px"], dim=-1
     )
-    visible = target["gate_corners_visible"].bool()
+    eligible = target["gate_supervision_eligible"].bool()
+    raw_visible = target["gate_corners_visible"].bool()
+    visible = raw_visible & eligible[:, None]
     predicted_visible = prediction["gate_visibility_logits"] >= 0.0
+    accumulator["supervised_examples"] += int(eligible.sum())
+    accumulator["excluded_examples"] += int((~eligible).sum())
     accumulator["visible_corners"] += int(visible.sum())
     accumulator["error_sum_px"] += float(error[visible].sum())
     accumulator["softargmax_error_sum_px"] += float(soft_error[visible].sum())
@@ -129,15 +139,16 @@ def update_metrics(accumulator, prediction, target, loss, parts):
     accumulator["pck8"] += int(((error <= 8.0) & visible).sum())
     accumulator["pck12"] += int(((error <= 12.0) & visible).sum())
     accumulator["visibility_tp"] += int((predicted_visible & visible).sum())
-    accumulator["visibility_fp"] += int((predicted_visible & ~visible).sum())
-    accumulator["visibility_tn"] += int((~predicted_visible & ~visible).sum())
+    supervised = eligible[:, None].expand_as(visible)
+    accumulator["visibility_fp"] += int((predicted_visible & ~raw_visible & supervised).sum())
+    accumulator["visibility_tn"] += int((~predicted_visible & ~raw_visible & supervised).sum())
     accumulator["visibility_fn"] += int((~predicted_visible & visible).sum())
-    visible_count = visible.sum(1)
-    all_four = visible_count == 4
+    visible_count = raw_visible.sum(1)
+    all_four = eligible & (visible_count == 4)
     accumulator["all_four_frames"] += int(all_four.sum())
     accumulator["all_four_pck8"] += int((all_four & (error <= 8.0).all(1)).sum())
     for count in range(5):
-        selected = visible_count == count
+        selected = eligible & (visible_count == count)
         group = accumulator["by_visible_count"][str(count)]
         group["frames"] += int(selected.sum())
         group["visible"] += int(visible[selected].sum())
@@ -164,6 +175,9 @@ def finalize_metrics(accumulator):
         }
     return {
         "examples": accumulator["examples"],
+        "supervised_examples": accumulator["supervised_examples"],
+        "excluded_examples": accumulator["excluded_examples"],
+        "supervision_coverage": accumulator["supervised_examples"] / examples,
         "loss": accumulator["loss_sum"] / examples,
         **{name: value / examples for name, value in accumulator["parts"].items()},
         "visible_corners": accumulator["visible_corners"],
@@ -258,9 +272,14 @@ def main():
     if device.type != "cuda":
         raise RuntimeError("gate-head training requires a Slurm GPU allocation")
 
-    train_set = TTCGateDataset(args.dataset, "train", augment=True)
-    validation_set = TTCGateDataset(args.dataset, "validation")
-    test_set = TTCGateDataset(args.dataset, "test")
+    quality = dict(
+        maximum_gate_distance_m=args.maximum_gate_distance_m,
+        minimum_gate_span_px=args.minimum_gate_span_px,
+        minimum_gate_area_px2=args.minimum_gate_area_px2,
+    )
+    train_set = TTCGateDataset(args.dataset, "train", augment=True, **quality)
+    validation_set = TTCGateDataset(args.dataset, "validation", **quality)
+    test_set = TTCGateDataset(args.dataset, "test", **quality)
     sampler_weights, sampling = gate_sampling_weights(train_set)
     generator = torch.Generator().manual_seed(args.seed)
     sampler = WeightedRandomSampler(
@@ -309,6 +328,7 @@ def main():
         "splits": {
             "train": len(train_set), "validation": len(validation_set), "test": len(test_set)
         },
+        "gate_supervision_policy": train_set.gate_supervision_policy(),
         "sampling": sampling,
         "initialization": initialization,
         "parameters": sum(parameter.numel() for parameter in model.parameters()),

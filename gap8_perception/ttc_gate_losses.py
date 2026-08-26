@@ -62,24 +62,27 @@ def gate_perception_loss(
     coordinate_weight=0.5,
     visibility_weight=0.25,
 ):
+    eligible = target["gate_supervision_eligible"].bool()
     visible = target["gate_corners_visible"].bool()
+    supervised_visible = visible & eligible[:, None]
     corners = target["gate_corners_px"]
     logits = prediction["gate_heatmap_logits"]
-    heatmaps = gate_heatmap_targets(corners, visible)
+    heatmaps = gate_heatmap_targets(corners, supervised_visible)
     target_distribution = heatmaps.flatten(2)
     target_distribution = target_distribution / target_distribution.sum(-1, keepdim=True).clamp_min(1e-12)
     spatial_cross_entropy = -(
         target_distribution * torch.log_softmax(logits.flatten(2), dim=-1)
     ).sum(-1)
-    heatmap = _masked_mean(spatial_cross_entropy, visible)
+    heatmap = _masked_mean(spatial_cross_entropy, supervised_visible)
     decoded = softargmax_gate_coordinates(logits)
     coordinate_values = F.smooth_l1_loss(
         decoded / CELL_SIZE, corners / CELL_SIZE, reduction="none"
     ).mean(-1)
-    coordinate = _masked_mean(coordinate_values, visible)
-    visibility = F.binary_cross_entropy_with_logits(
-        prediction["gate_visibility_logits"], visible.to(logits.dtype)
+    coordinate = _masked_mean(coordinate_values, supervised_visible)
+    visibility_values = F.binary_cross_entropy_with_logits(
+        prediction["gate_visibility_logits"], visible.to(logits.dtype), reduction="none"
     )
+    visibility = _masked_mean(visibility_values, eligible[:, None].expand_as(visible))
     total = (
         heatmap_weight * heatmap
         + coordinate_weight * coordinate

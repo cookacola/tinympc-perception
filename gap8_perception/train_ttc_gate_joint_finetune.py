@@ -38,6 +38,7 @@ PARENT_KEYS = (
     "images", "onboard_state", "inverse_ttc", "ttc_valid", "ttc_approaching",
     "inverse_depth", "depth_valid", "flow", "flow_valid",
     "gate_corners_px", "gate_corners_visible",
+    "gate_supervision_eligible",
 )
 VALIDATION_LIMITS = {
     "inverse_ttc_mae_s_inv": 0.16806538474782983,
@@ -79,6 +80,9 @@ def parse_args():
     parser.add_argument("--minimum-epochs", type=int, default=4)
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20260829)
+    parser.add_argument("--maximum-gate-distance-m", type=float, default=8.0)
+    parser.add_argument("--minimum-gate-span-px", type=float, default=16.0)
+    parser.add_argument("--minimum-gate-area-px2", type=float, default=256.0)
     return parser.parse_args()
 
 
@@ -222,9 +226,14 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type != "cuda":
         raise RuntimeError("joint gate fine-tuning requires a Slurm GPU allocation")
-    train_set = TTCGateDataset(args.dataset, "train", augment=True)
-    validation_set = TTCGateDataset(args.dataset, "validation")
-    test_set = TTCGateDataset(args.dataset, "test")
+    quality = dict(
+        maximum_gate_distance_m=args.maximum_gate_distance_m,
+        minimum_gate_span_px=args.minimum_gate_span_px,
+        minimum_gate_area_px2=args.minimum_gate_area_px2,
+    )
+    train_set = TTCGateDataset(args.dataset, "train", augment=True, **quality)
+    validation_set = TTCGateDataset(args.dataset, "validation", **quality)
+    test_set = TTCGateDataset(args.dataset, "test", **quality)
     weights, sampling = gate_sampling_weights(train_set)
     sampler = WeightedRandomSampler(
         weights, num_samples=len(train_set), replacement=True,
@@ -271,6 +280,7 @@ def main():
     summary = {
         "experiment": "ttc_motion_gate_joint_finetune_v1",
         "dataset": str(args.dataset.resolve()),
+        "gate_supervision_policy": train_set.gate_supervision_policy(),
         "sampling": sampling,
         "initialization": initialization,
         "parent_checkpoint": str(args.parent_checkpoint.resolve()),

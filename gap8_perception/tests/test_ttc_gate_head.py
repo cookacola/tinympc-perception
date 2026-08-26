@@ -53,6 +53,7 @@ def test_gate_only_optimization_leaves_parent_parameters_and_buffers_exact():
         "gate_corners_px": torch.tensor([[[20.0, 20.0], [140.0, 20.0],
                                            [140.0, 140.0], [20.0, 140.0]]]),
         "gate_corners_visible": torch.ones(1, 4, dtype=torch.bool),
+        "gate_supervision_eligible": torch.ones(1, dtype=torch.bool),
     }
     optimizer = torch.optim.AdamW(
         [parameter for parameter in model.parameters() if parameter.requires_grad], lr=1e-3
@@ -94,6 +95,7 @@ def test_invisible_corner_masks_heatmap_and_coordinate_losses():
         "gate_corners_px": torch.tensor([[[20.0, 20.0], [140.0, 20.0],
                                            [140.0, 140.0], [20.0, 140.0]]]),
         "gate_corners_visible": torch.tensor([[True, True, False, False]]),
+        "gate_supervision_eligible": torch.ones(1, dtype=torch.bool),
     }
     _total, parts = gate_perception_loss(prediction, target)
     changed = {key: value.clone() for key, value in prediction.items()}
@@ -108,6 +110,7 @@ def test_spatial_heatmap_loss_prefers_the_correct_corner_peak():
         "gate_corners_px": torch.tensor([[[3.5, 3.5], [155.5, 3.5],
                                            [155.5, 155.5], [3.5, 155.5]]]),
         "gate_corners_visible": torch.ones(1, 4, dtype=torch.bool),
+        "gate_supervision_eligible": torch.ones(1, dtype=torch.bool),
     }
     correct_logits = torch.full((1, 4, 20, 20), -4.0)
     wrong_logits = torch.full((1, 4, 20, 20), -4.0)
@@ -160,12 +163,14 @@ def test_gate_sampler_reproduces_predeclared_visible_count_masses():
             return len(self.samples)
 
     dataset = FakeDataset()
+    dataset.gate_supervision_policy = lambda: {"test": True}
     for count in range(5):
         valid = np.zeros((3, 4), np.uint8)
         valid[:, :count] = 1
         dataset.trajectories.append({
             "layout_id": f"layout_{count}", "trajectory_id": "trajectory_0",
             "trajectory_type": "test", "targets": {"gate_corners_valid_u8": valid},
+            "gate_geometry": {"eligible": np.ones(3, dtype=bool)},
         })
         dataset.samples.extend((count, index) for index in range(3))
     weights, summary = gate_sampling_weights(dataset)
@@ -175,6 +180,46 @@ def test_gate_sampler_reproduces_predeclared_visible_count_masses():
         selected = slice(count * 3, count * 3 + 3)
         assert np.isclose(weights[selected].sum(), mass)
         assert np.isclose(summary["expected_visible_count_mass"][str(count)], mass)
+
+
+def test_gate_quality_mask_keeps_large_partial_and_true_negative_but_excludes_far_small():
+    dataset = TTCGateDataset.__new__(TTCGateDataset)
+    dataset.maximum_gate_distance_m = 8.0
+    dataset.minimum_gate_span_px = 16.0
+    dataset.minimum_gate_area_px2 = 256.0
+    frames = [
+        {"vehicle_state": {"position_m": [distance, 0.0, 0.0]}}
+        for distance in (0.0, 0.0, -9.0, 0.0)
+    ]
+    large = np.asarray([[20, 20], [40, 20], [40, 40], [20, 40]], np.float32)
+    small = np.asarray([[20, 20], [30, 20], [30, 30], [20, 30]], np.float32)
+    targets = {
+        "gate_index_i16": np.asarray([-1, 0, 0, 0], np.int16),
+        "gate_corners_px_f32": np.stack((large, large, large, small)),
+        "gate_corners_valid_u8": np.asarray([
+            [0, 0, 0, 0], [1, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]
+        ], np.uint8),
+    }
+    geometry = dataset._gate_geometry(frames, targets, [{"center_m": [0, 0, 0]}])
+    assert geometry["eligible"].tolist() == [True, True, False, False]
+
+
+def test_ineligible_gate_sample_contributes_zero_loss_and_gradient():
+    logits = torch.randn(1, 4, 20, 20, requires_grad=True)
+    visibility = torch.randn(1, 4, requires_grad=True)
+    target = {
+        "gate_corners_px": torch.zeros(1, 4, 2),
+        "gate_corners_visible": torch.ones(1, 4, dtype=torch.bool),
+        "gate_supervision_eligible": torch.zeros(1, dtype=torch.bool),
+    }
+    loss, parts = gate_perception_loss({
+        "gate_heatmap_logits": logits, "gate_visibility_logits": visibility,
+    }, target)
+    assert loss == 0
+    assert all(value == 0 for value in parts.values())
+    loss.backward()
+    assert torch.count_nonzero(logits.grad) == 0
+    assert torch.count_nonzero(visibility.grad) == 0
 
 
 def test_parent_distillation_is_zero_for_identical_outputs():
