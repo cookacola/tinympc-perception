@@ -102,6 +102,31 @@ def test_invisible_corner_masks_heatmap_and_coordinate_losses():
     torch.testing.assert_close(parts["coordinate"], changed_parts["coordinate"])
 
 
+def test_spatial_heatmap_loss_prefers_the_correct_corner_peak():
+    target = {
+        "gate_corners_px": torch.tensor([[[3.5, 3.5], [155.5, 3.5],
+                                           [155.5, 155.5], [3.5, 155.5]]]),
+        "gate_corners_visible": torch.ones(1, 4, dtype=torch.bool),
+    }
+    correct_logits = torch.full((1, 4, 20, 20), -4.0)
+    wrong_logits = torch.full((1, 4, 20, 20), -4.0)
+    correct_peaks = (0, 19, 399, 380)
+    wrong_peaks = (399, 380, 0, 19)
+    for corner in range(4):
+        correct_logits[0, corner].view(-1)[correct_peaks[corner]] = 4.0
+        wrong_logits[0, corner].view(-1)[wrong_peaks[corner]] = 4.0
+    visibility_logits = torch.full((1, 4), 4.0)
+    _correct_total, correct = gate_perception_loss({
+        "gate_heatmap_logits": correct_logits,
+        "gate_visibility_logits": visibility_logits,
+    }, target)
+    _wrong_total, wrong = gate_perception_loss({
+        "gate_heatmap_logits": wrong_logits,
+        "gate_visibility_logits": visibility_logits,
+    }, target)
+    assert correct["heatmap"] < wrong["heatmap"]
+
+
 def test_horizontal_flip_preserves_semantic_corner_order(monkeypatch):
     sample = {
         "images": np.zeros((2, 160, 160), np.float32),

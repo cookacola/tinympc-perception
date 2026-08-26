@@ -66,10 +66,12 @@ def gate_perception_loss(
     corners = target["gate_corners_px"]
     logits = prediction["gate_heatmap_logits"]
     heatmaps = gate_heatmap_targets(corners, visible)
-    pixel_weight = 1.0 + 10.0 * heatmaps
-    heatmap_values = F.binary_cross_entropy_with_logits(logits, heatmaps, reduction="none")
-    heatmap_mask = visible[:, :, None, None].expand_as(heatmap_values)
-    heatmap = _masked_mean(heatmap_values * pixel_weight, heatmap_mask)
+    target_distribution = heatmaps.flatten(2)
+    target_distribution = target_distribution / target_distribution.sum(-1, keepdim=True).clamp_min(1e-12)
+    spatial_cross_entropy = -(
+        target_distribution * torch.log_softmax(logits.flatten(2), dim=-1)
+    ).sum(-1)
+    heatmap = _masked_mean(spatial_cross_entropy, visible)
     decoded = softargmax_gate_coordinates(logits)
     coordinate_values = F.smooth_l1_loss(
         decoded / CELL_SIZE, corners / CELL_SIZE, reduction="none"
