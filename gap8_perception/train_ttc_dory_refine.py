@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument("--critical-regression-weight", type=float, default=1.0)
     parser.add_argument("--critical-risk-weight", type=float, default=0.5)
     parser.add_argument("--critical-positive-weight", type=float, default=4.0)
+    parser.add_argument("--general-guard-multiplier", type=float, default=1.15)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--minimum-epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=6)
@@ -84,7 +85,7 @@ def train_epoch(model, teacher, loader, optimizer, device, args):
     }
 
 
-def selection_key(validation):
+def selection_key(validation, general_guard_multiplier=1.15):
     values = validation["ttc"]
     normalized_error = sum(
         values[name] / VALIDATION_LIMITS[name]
@@ -99,8 +100,16 @@ def selection_key(validation):
         2 * regression_precision * regression_recall
         / max(regression_precision + regression_recall, 1e-12)
     )
+    general_guard_passed = all(
+        values[name] <= general_guard_multiplier * VALIDATION_LIMITS[name]
+        for name in (
+            "inverse_ttc_mae_s_inv", "approaching_inverse_ttc_mae_s_inv",
+            "inverse_depth_mae_m_inv", "flow_epe_cells",
+        )
+    )
     return (
         int(validation["retention_passed"]),
+        int(general_guard_passed),
         -values["critical_inverse_ttc_mae_s_inv"],
         regression_f1,
         -values["approaching_inverse_ttc_mae_s_inv"],
@@ -166,6 +175,7 @@ def main():
             "critical_regression_weight": args.critical_regression_weight,
             "critical_risk_weight": args.critical_risk_weight,
             "critical_positive_weight": args.critical_positive_weight,
+            "general_guard_multiplier": args.general_guard_multiplier,
             "selection_priority": [
                 "complete_retention", "critical_inverse_ttc_mae",
                 "regression_critical_f1", "approaching_inverse_ttc_mae",
@@ -185,13 +195,15 @@ def main():
         "epoch": 0, "model": model.state_dict(), "validation": baseline, "config": summary,
     }
     atomic_torch_save(initial_record, best_path)
-    best_key, history, stale = selection_key(baseline), [], 0
+    best_key, history, stale = selection_key(
+        baseline, args.general_guard_multiplier
+    ), [], 0
     started = time.time()
     for epoch in range(1, args.epochs + 1):
         training = train_epoch(model, teacher, train_loader, optimizer, device, args)
         validation = evaluate(model, validation_loader, device)
         scheduler.step()
-        key = selection_key(validation)
+        key = selection_key(validation, args.general_guard_multiplier)
         improved = key > best_key
         if improved:
             best_key, stale = key, 0
