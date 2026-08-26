@@ -1,0 +1,23 @@
+gapy --target=gapuino_v2 --platform=gvsoc --work-dir=/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/gate_head_gap8_application/BUILD/GAP8_V2/GCC_RISCV  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution0_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution1_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution2_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution3_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_inputs.hex   run --exec-prepare --exec --binary=/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/gate_head_gap8_application/BUILD/GAP8_V2/GCC_RISCV/main
+
+L3 Buffer alloc initial	@ 8126464:	Ok
+
+L3 Buffer alloc initial	@ 7995392:	Ok
+
+L3 Buffer alloc initial	@ 7864320:	Ok
+
+L2 Buffer alloc initial	@ 0x1c011da0:	Ok
+Layer gap8_BNReluConvolution0 0 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution1 1 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution2 2 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution3 3 ended:
+Checking layer: Checksum OK
+
+Final performance:
+  - num cycles: 554380
+  - MACs: 1190400
+  - MAC/cycle: 2.14726
+  - n. of Cores: 7

@@ -1,0 +1,177 @@
+{
+  "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+  "initialization": {
+    "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+    "epoch": 0,
+    "ttc_refinements": 3
+  },
+  "corner_order": [
+    "TL",
+    "TR",
+    "BR",
+    "BL"
+  ],
+  "examples": [
+    {
+      "score": 0.01807953231036663,
+      "dataset_index": 7191,
+      "visible_count": 0,
+      "mean_visible_error_px": 0.0,
+      "mean_visibility_probability": 0.01807953231036663,
+      "gate_distance_m": -1.0,
+      "gate_projected_width_px": 0.0,
+      "gate_projected_height_px": 0.0,
+      "gate_projected_area_px2": 0.0,
+      "category": "no_gate_correct",
+      "file": "no_gate_correct_aggressive_attitude.png",
+      "layout_id": "layout_50118",
+      "trajectory_id": "trajectory_00002",
+      "trajectory_type": "aggressive_attitude",
+      "frame_index": 94,
+      "visibility_probability_tl_tr_br_bl": [
+        0.026225285604596138,
+        0.018381386995315552,
+        0.01269934605807066,
+        0.015012110583484173
+      ]
+    },
+    {
+      "score": 1.8088196516036987,
+      "dataset_index": 1864,
+      "visible_count": 1,
+      "mean_visible_error_px": 1.8088196516036987,
+      "mean_visibility_probability": 0.3384058475494385,
+      "gate_distance_m": 0.47993266582489014,
+      "gate_projected_width_px": 895.5819091796875,
+      "gate_projected_height_px": 531.37646484375,
+      "gate_projected_area_px2": 339679.9375,
+      "category": "one_corner",
+      "file": "one_corner_near_miss.png",
+      "layout_id": "layout_43064",
+      "trajectory_id": "trajectory_00001",
+      "trajectory_type": "near_miss",
+      "frame_index": 88,
+      "visibility_probability_tl_tr_br_bl": [
+        0.32876449823379517,
+        0.33999672532081604,
+        0.36202746629714966,
+        0.32283464074134827
+      ]
+    },
+    {
+      "score": 0.6617820858955383,
+      "dataset_index": 10362,
+      "visible_count": 2,
+      "mean_visible_error_px": 0.6617820858955383,
+      "mean_visibility_probability": 0.6327534317970276,
+      "gate_distance_m": 1.697922706604004,
+      "gate_projected_width_px": 48.12099075317383,
+      "gate_projected_height_px": 41.97864532470703,
+      "gate_projected_area_px2": 2017.9447021484375,
+      "category": "two_corners",
+      "file": "two_corners_near_miss.png",
+      "layout_id": "layout_50204",
+      "trajectory_id": "trajectory_00001",
+      "trajectory_type": "near_miss",
+      "frame_index": 60,
+      "visibility_probability_tl_tr_br_bl": [
+        0.6263331770896912,
+        0.6602404713630676,
+        0.6499958038330078,
+        0.5944443345069885
+      ]
+    },
+    {
+      "score": 2.79107928276062,
+      "dataset_index": 9947,
+      "visible_count": 3,
+      "mean_visible_error_px": 2.79107928276062,
+      "mean_visibility_probability": 0.8532055020332336,
+      "gate_distance_m": 0.4324517250061035,
+      "gate_projected_width_px": 118.08757019042969,
+      "gate_projected_height_px": 120.86521911621094,
+      "gate_projected_area_px2": 14259.05078125,
+      "category": "three_corners",
+      "file": "three_corners_safe_open.png",
+      "layout_id": "layout_50202",
+      "trajectory_id": "trajectory_00002",
+      "trajectory_type": "safe_open",
+      "frame_index": 45,
+      "visibility_probability_tl_tr_br_bl": [
+        0.8317597508430481,
+        0.7921686172485352,
+        0.8795968890190125,
+        0.9092967510223389
+      ]
+    },
+    {
+      "score": 0.5592617988586426,
+      "dataset_index": 9426,
+      "visible_count": 4,
+      "mean_visible_error_px": 0.5592617988586426,
+      "mean_visibility_probability": 0.9949510097503662,
+      "gate_distance_m": 2.193803071975708,
+      "gate_projected_width_px": 23.693326950073242,
+      "gate_projected_height_px": 23.268686294555664,
+      "gate_projected_area_px2": 550.8781127929688,
+      "category": "full_gate_good",
+      "file": "full_gate_good_grazing.png",
+      "layout_id": "layout_50200",
+      "trajectory_id": "trajectory_00002",
+      "trajectory_type": "grazing",
+      "frame_index": 2,
+      "visibility_probability_tl_tr_br_bl": [
+        0.9984270334243774,
+        0.9920964241027832,
+        0.9906492829322815,
+        0.9986312985420227
+      ]
+    },
+    {
+      "score": 80.0,
+      "dataset_index": 65,
+      "visible_count": 4,
+      "mean_visible_error_px": 81.3552474975586,
+      "mean_visibility_probability": 0.050564687699079514,
+      "gate_distance_m": 2.99636173248291,
+      "gate_projected_width_px": 17.441810607910156,
+      "gate_projected_height_px": 19.78607177734375,
+      "gate_projected_area_px2": 342.40625,
+      "category": "full_gate_hard",
+      "file": "full_gate_hard_safe_open.png",
+      "layout_id": "layout_43056",
+      "trajectory_id": "trajectory_00000",
+      "trajectory_type": "safe_open",
+      "frame_index": 66,
+      "visibility_probability_tl_tr_br_bl": [
+        0.03813903033733368,
+        0.04242706298828125,
+        0.07300344854593277,
+        0.04868922382593155
+      ]
+    },
+    {
+      "score": 0.938745379447937,
+      "dataset_index": 13066,
+      "visible_count": 0,
+      "mean_visible_error_px": 0.0,
+      "mean_visibility_probability": 0.938745379447937,
+      "gate_distance_m": -1.0,
+      "gate_projected_width_px": 0.0,
+      "gate_projected_height_px": 0.0,
+      "gate_projected_area_px2": 0.0,
+      "category": "no_gate_false_alarm",
+      "file": "no_gate_false_alarm_near_miss.png",
+      "layout_id": "layout_50287",
+      "trajectory_id": "trajectory_00002",
+      "trajectory_type": "near_miss",
+      "frame_index": 67,
+      "visibility_probability_tl_tr_br_bl": [
+        0.9632100462913513,
+        0.9177306890487671,
+        0.9103231430053711,
+        0.9637177586555481
+      ]
+    }
+  ]
+}

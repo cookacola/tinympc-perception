@@ -1,0 +1,701 @@
+{
+  "format": "dory-motion-gate-ttc-nemo-v1",
+  "bridge": {
+    "format": "dory-motion-gate-ttc-bridge-v1",
+    "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+    "checkpoint_sha256": "24c36229bdfedb755726c811d2812bf0b10cf337c32cd1c2718c2ffbec302adc",
+    "source_epoch": 0,
+    "ttc_refinements": 3,
+    "checkpoint_ttc_refinements": 3,
+    "compaction": {
+      "source_ttc_refinements": 3,
+      "deployed_ttc_refinements": 3,
+      "pruned_identity_blocks": [],
+      "max_abs_output_difference": 0.0
+    },
+    "state_shift": 4.0,
+    "graphs": {
+      "encoder": {
+        "input": [
+          2,
+          160,
+          160
+        ],
+        "output": [
+          64,
+          20,
+          20
+        ]
+      },
+      "gate_head": {
+        "input": [
+          64,
+          20,
+          20
+        ],
+        "output": [
+          8,
+          20,
+          20
+        ]
+      },
+      "ttc_head": {
+        "input": [
+          74,
+          20,
+          20
+        ],
+        "output": [
+          7,
+          20,
+          20
+        ]
+      }
+    },
+    "sample_counts": {
+      "calibration": 128,
+      "parity": 256
+    }
+  },
+  "input_layout": "HWC two-frame uint8 encoder input",
+  "ttc_packed_input": {
+    "shape": [
+      74,
+      20,
+      20
+    ],
+    "channels": "64 requantized e2 then 10 broadcast normalized-state-plus-4",
+    "epsilon": 0.12102776020765305,
+    "state_shift": 4.0
+  },
+  "graphs": [
+    {
+      "graph": "encoder",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/integer/encoder/encoder_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Floor",
+        "Mul"
+      ],
+      "output_epsilon": 0.12102776020765305,
+      "output_offset": [
+        0.0
+      ],
+      "parity_feature_mae": 0.5156804323196411,
+      "parity_feature_max": 14.719066619873047,
+      "integer_output_shape": [
+        1,
+        64,
+        20,
+        20
+      ],
+      "integer_nonzero": 22507,
+      "integer_layers": 22,
+      "residual_adds_configured": 27,
+      "residual_requantization_factor": 1,
+      "bn_calibration_range_factor": 8,
+      "data_driven_batchnorm_calibration": false,
+      "qat_checkpoint": null,
+      "activation_bits": 8,
+      "signed_weight_bits": 7,
+      "parity_images": 256,
+      "weight_quantization": [
+        {
+          "name": "stem.0.0",
+          "minimum_before": -60.999996185302734,
+          "maximum_before": 65.99999237060547,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 18,
+          "minimum_after": -61,
+          "maximum_after": 66
+        },
+        {
+          "name": "stem.1.depthwise.0",
+          "minimum_before": -59.000003814697266,
+          "maximum_before": 68.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 12,
+          "minimum_after": -59,
+          "maximum_after": 68
+        },
+        {
+          "name": "stem.1.pointwise.0",
+          "minimum_before": -64.0,
+          "maximum_before": 63.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 41,
+          "minimum_after": -64,
+          "maximum_after": 63
+        },
+        {
+          "name": "stage1.0.depthwise.0",
+          "minimum_before": -71.0,
+          "maximum_before": 54.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 12,
+          "minimum_after": -71,
+          "maximum_after": 55
+        },
+        {
+          "name": "stage1.0.pointwise.0",
+          "minimum_before": -66.0,
+          "maximum_before": 61.000003814697266,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 48,
+          "minimum_after": -66,
+          "maximum_after": 61
+        },
+        {
+          "name": "stage1.1.block.depthwise.0",
+          "minimum_before": -49.0,
+          "maximum_before": 78.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -49,
+          "maximum_after": 78
+        },
+        {
+          "name": "stage1.1.block.pointwise.0",
+          "minimum_before": -56.0,
+          "maximum_before": 71.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 122,
+          "minimum_after": -56,
+          "maximum_after": 71
+        },
+        {
+          "name": "stage1.2.block.depthwise.0",
+          "minimum_before": -55.0,
+          "maximum_before": 72.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 41,
+          "minimum_after": -55,
+          "maximum_after": 72
+        },
+        {
+          "name": "stage1.2.block.pointwise.0",
+          "minimum_before": -65.0,
+          "maximum_before": 61.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 150,
+          "minimum_after": -65,
+          "maximum_after": 62
+        },
+        {
+          "name": "stage2.0.depthwise.0",
+          "minimum_before": -57.0,
+          "maximum_before": 70.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 33,
+          "minimum_after": -57,
+          "maximum_after": 70
+        },
+        {
+          "name": "stage2.0.pointwise.0",
+          "minimum_before": -60.0,
+          "maximum_before": 67.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 19,
+          "minimum_after": -60,
+          "maximum_after": 67
+        },
+        {
+          "name": "stage2.1.block.depthwise.0",
+          "minimum_before": -66.0,
+          "maximum_before": 60.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 2,
+          "minimum_after": -66,
+          "maximum_after": 61
+        },
+        {
+          "name": "stage2.1.block.pointwise.0",
+          "minimum_before": -69.0,
+          "maximum_before": 58.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 25,
+          "minimum_after": -69,
+          "maximum_after": 58
+        },
+        {
+          "name": "stage2.2.block.depthwise.0",
+          "minimum_before": -59.999996185302734,
+          "maximum_before": 67.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 78,
+          "minimum_after": -60,
+          "maximum_after": 67
+        },
+        {
+          "name": "stage2.2.block.pointwise.0",
+          "minimum_before": -67.0,
+          "maximum_before": 59.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 943,
+          "minimum_after": -67,
+          "maximum_after": 60
+        },
+        {
+          "name": "stage2.3.block.depthwise.0",
+          "minimum_before": -59.0,
+          "maximum_before": 68.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 29,
+          "minimum_after": -59,
+          "maximum_after": 68
+        },
+        {
+          "name": "stage2.3.block.pointwise.0",
+          "minimum_before": -62.0,
+          "maximum_before": 65.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 257,
+          "minimum_after": -62,
+          "maximum_after": 65
+        }
+      ],
+      "onnx_int8_convolution_weights": [
+        {
+          "name": "stem.0.0.weight",
+          "minimum": -61,
+          "maximum": 66,
+          "values": 288
+        },
+        {
+          "name": "stem.1.depthwise.0.weight",
+          "minimum": -59,
+          "maximum": 68,
+          "values": 144
+        },
+        {
+          "name": "stem.1.pointwise.0.weight",
+          "minimum": -64,
+          "maximum": 63,
+          "values": 256
+        },
+        {
+          "name": "stage1.0.depthwise.0.weight",
+          "minimum": -71,
+          "maximum": 55,
+          "values": 144
+        },
+        {
+          "name": "stage1.0.pointwise.0.weight",
+          "minimum": -66,
+          "maximum": 61,
+          "values": 512
+        },
+        {
+          "name": "stage1.1.block.depthwise.0.weight",
+          "minimum": -49,
+          "maximum": 78,
+          "values": 288
+        },
+        {
+          "name": "stage1.1.block.pointwise.0.weight",
+          "minimum": -56,
+          "maximum": 71,
+          "values": 1024
+        },
+        {
+          "name": "stage1.2.block.depthwise.0.weight",
+          "minimum": -55,
+          "maximum": 72,
+          "values": 288
+        },
+        {
+          "name": "stage1.2.block.pointwise.0.weight",
+          "minimum": -65,
+          "maximum": 62,
+          "values": 1024
+        },
+        {
+          "name": "stage2.0.depthwise.0.weight",
+          "minimum": -57,
+          "maximum": 70,
+          "values": 288
+        },
+        {
+          "name": "stage2.0.pointwise.0.weight",
+          "minimum": -60,
+          "maximum": 67,
+          "values": 2048
+        },
+        {
+          "name": "stage2.1.block.depthwise.0.weight",
+          "minimum": -66,
+          "maximum": 61,
+          "values": 576
+        },
+        {
+          "name": "stage2.1.block.pointwise.0.weight",
+          "minimum": -69,
+          "maximum": 58,
+          "values": 4096
+        },
+        {
+          "name": "stage2.2.block.depthwise.0.weight",
+          "minimum": -60,
+          "maximum": 67,
+          "values": 576
+        },
+        {
+          "name": "stage2.2.block.pointwise.0.weight",
+          "minimum": -67,
+          "maximum": 60,
+          "values": 4096
+        },
+        {
+          "name": "stage2.3.block.depthwise.0.weight",
+          "minimum": -59,
+          "maximum": 68,
+          "values": 576
+        },
+        {
+          "name": "stage2.3.block.pointwise.0.weight",
+          "minimum": -62,
+          "maximum": 65,
+          "values": 4096
+        }
+      ]
+    },
+    {
+      "graph": "gate_head",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/integer/gate_head/gate_head_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Mul"
+      ],
+      "input_epsilon": 0.12102776020765305,
+      "output_epsilon": 0.43528661131858826,
+      "output_offset": [
+        16.67958341369629,
+        16.10550199279785,
+        15.792280061340332,
+        16.627329690551758,
+        9.178130967712402,
+        8.035559518432617,
+        10.035597665405273,
+        11.010162217712402
+      ],
+      "learned_bias": [
+        0.2670919597148895,
+        0.2524774968624115,
+        0.32010045647621155,
+        0.005730362143367529,
+        -0.0807904452085495,
+        0.11254213005304337,
+        0.24490012228488922,
+        0.041077621281147
+      ],
+      "parity_logit_mae": 1.7827145611052264,
+      "parity_logit_max": 45.94198527356386,
+      "parity_probability_mae": 0.08789863028913211,
+      "parity_probability_max": 0.9993307642980275,
+      "parity_corner_peak_mean_heatmap_px": null,
+      "parity_corner_peak_p95_heatmap_px": null,
+      "integer_output_shape": [
+        1,
+        8,
+        20,
+        20
+      ],
+      "integer_nonzero": 3200,
+      "integer_layers": 4,
+      "residual_adds_configured": 4,
+      "residual_requantization_factor": 1,
+      "bn_calibration_range_factor": 8,
+      "data_driven_batchnorm_calibration": false,
+      "qat_checkpoint": null,
+      "activation_bits": 8,
+      "signed_weight_bits": 7,
+      "qat_offset_source": null,
+      "parity_images": 256,
+      "weight_quantization": [
+        {
+          "name": "adapter.0",
+          "minimum_before": -54.0,
+          "maximum_before": 73.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -54,
+          "maximum_after": 73
+        },
+        {
+          "name": "head_features.depthwise.0",
+          "minimum_before": -70.0,
+          "maximum_before": 56.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 61,
+          "minimum_after": -70,
+          "maximum_after": 57
+        },
+        {
+          "name": "head_features.pointwise.0",
+          "minimum_before": -76.0,
+          "maximum_before": 51.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 38,
+          "minimum_after": -76,
+          "maximum_after": 51
+        },
+        {
+          "name": "output_proj.0",
+          "minimum_before": -35.0,
+          "maximum_before": 92.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 6,
+          "minimum_after": -35,
+          "maximum_after": 92
+        }
+      ],
+      "onnx_int8_convolution_weights": [
+        {
+          "name": "adapter.0.weight",
+          "minimum": -54,
+          "maximum": 73,
+          "values": 2048
+        },
+        {
+          "name": "head_features.depthwise.0.weight",
+          "minimum": -70,
+          "maximum": 57,
+          "values": 288
+        },
+        {
+          "name": "head_features.pointwise.0.weight",
+          "minimum": -76,
+          "maximum": 51,
+          "values": 512
+        },
+        {
+          "name": "output_proj.0.weight",
+          "minimum": -35,
+          "maximum": 92,
+          "values": 128
+        }
+      ]
+    },
+    {
+      "graph": "ttc_head",
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/integer/ttc_head/ttc_head_int.onnx",
+      "operators": [
+        "Add",
+        "Cast",
+        "Clip",
+        "Constant",
+        "Conv",
+        "Div",
+        "Floor",
+        "Mul"
+      ],
+      "input_epsilon": 0.12102776020765305,
+      "output_epsilon": 0.05504920706152916,
+      "output_offset": [
+        5.077584607696533,
+        1.9997845722198486,
+        1.351588709449768,
+        1.9864920211791992,
+        6.695861680603027,
+        1.5663742853164673,
+        4.506462915039062
+      ],
+      "learned_bias": [
+        -0.06746210157871246,
+        -0.11340651661157608,
+        0.04185229167342186,
+        -0.02406192384660244,
+        0.08821047097444534,
+        -0.00792025402188301,
+        -0.34070301055908203
+      ],
+      "parity_logit_mae": 0.3915023847923191,
+      "parity_logit_max": 5.86086058447361,
+      "parity_probability_mae": 0.06938877039023637,
+      "parity_probability_max": 0.824494998881546,
+      "parity_corner_peak_mean_heatmap_px": null,
+      "parity_corner_peak_p95_heatmap_px": null,
+      "integer_output_shape": [
+        1,
+        7,
+        20,
+        20
+      ],
+      "integer_nonzero": 2800,
+      "integer_layers": 13,
+      "residual_adds_configured": 16,
+      "residual_requantization_factor": 1,
+      "bn_calibration_range_factor": 8,
+      "data_driven_batchnorm_calibration": false,
+      "qat_checkpoint": null,
+      "activation_bits": 8,
+      "signed_weight_bits": 7,
+      "qat_offset_source": null,
+      "parity_images": 256,
+      "weight_quantization": [
+        {
+          "name": "adapter.0",
+          "minimum_before": -62.0,
+          "maximum_before": 65.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -62,
+          "maximum_after": 65
+        },
+        {
+          "name": "deep.0.block.depthwise.0",
+          "minimum_before": -71.0,
+          "maximum_before": 55.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 79,
+          "minimum_after": -71,
+          "maximum_after": 56
+        },
+        {
+          "name": "deep.0.block.pointwise.0",
+          "minimum_before": -69.0,
+          "maximum_before": 58.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -69,
+          "maximum_after": 58
+        },
+        {
+          "name": "deep.1.block.depthwise.0",
+          "minimum_before": -59.999996185302734,
+          "maximum_before": 67.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 97,
+          "minimum_after": -60,
+          "maximum_after": 67
+        },
+        {
+          "name": "deep.1.block.pointwise.0",
+          "minimum_before": -63.0,
+          "maximum_before": 64.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -63,
+          "maximum_after": 64
+        },
+        {
+          "name": "deep.2.block.depthwise.0",
+          "minimum_before": -77.0,
+          "maximum_before": 49.999996185302734,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 101,
+          "minimum_after": -77,
+          "maximum_after": 50
+        },
+        {
+          "name": "deep.2.block.pointwise.0",
+          "minimum_before": -64.0,
+          "maximum_before": 63.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 646,
+          "minimum_after": -64,
+          "maximum_after": 63
+        },
+        {
+          "name": "deep.3.depthwise.0",
+          "minimum_before": -68.0,
+          "maximum_before": 59.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 51,
+          "minimum_after": -68,
+          "maximum_after": 59
+        },
+        {
+          "name": "deep.3.pointwise.0",
+          "minimum_before": -61.0,
+          "maximum_before": 66.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 0,
+          "minimum_after": -61,
+          "maximum_after": 66
+        },
+        {
+          "name": "output_proj.0",
+          "minimum_before": -65.0,
+          "maximum_before": 62.0,
+          "overflow_values_clamped": 0,
+          "noninteger_values_rounded": 35,
+          "minimum_after": -65,
+          "maximum_after": 62
+        }
+      ],
+      "onnx_int8_convolution_weights": [
+        {
+          "name": "adapter.0.weight",
+          "minimum": -62,
+          "maximum": 65,
+          "values": 4736
+        },
+        {
+          "name": "deep.0.block.depthwise.0.weight",
+          "minimum": -71,
+          "maximum": 56,
+          "values": 576
+        },
+        {
+          "name": "deep.0.block.pointwise.0.weight",
+          "minimum": -69,
+          "maximum": 58,
+          "values": 4096
+        },
+        {
+          "name": "deep.1.block.depthwise.0.weight",
+          "minimum": -60,
+          "maximum": 67,
+          "values": 576
+        },
+        {
+          "name": "deep.1.block.pointwise.0.weight",
+          "minimum": -63,
+          "maximum": 64,
+          "values": 4096
+        },
+        {
+          "name": "deep.2.block.depthwise.0.weight",
+          "minimum": -77,
+          "maximum": 50,
+          "values": 576
+        },
+        {
+          "name": "deep.2.block.pointwise.0.weight",
+          "minimum": -64,
+          "maximum": 63,
+          "values": 4096
+        },
+        {
+          "name": "deep.3.depthwise.0.weight",
+          "minimum": -68,
+          "maximum": 59,
+          "values": 576
+        },
+        {
+          "name": "deep.3.pointwise.0.weight",
+          "minimum": -61,
+          "maximum": 66,
+          "values": 2048
+        },
+        {
+          "name": "output_proj.0.weight",
+          "minimum": -65,
+          "maximum": 62,
+          "values": 224
+        }
+      ]
+    }
+  ]
+}

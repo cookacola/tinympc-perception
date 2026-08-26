@@ -1,0 +1,59 @@
+gapy --target=gapuino_v2 --platform=gvsoc --work-dir=/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/encoder_gap8_application/BUILD/GAP8_V2/GCC_RISCV  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution0_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution1_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution2_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution3_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution4_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution5_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution6_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution8_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution9_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution11_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution12_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution13_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution14_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution16_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution17_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution19_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_BNReluConvolution20_weights.hex  --config-opt=flash/content/partitions/readfs/files=hex/gap8_inputs.hex   run --exec-prepare --exec --binary=/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/encoder_gap8_application/BUILD/GAP8_V2/GCC_RISCV/main
+
+L3 Buffer alloc initial	@ 8126464:	Ok
+
+L3 Buffer alloc initial	@ 7995392:	Ok
+
+L3 Buffer alloc initial	@ 7864320:	Ok
+
+L2 Buffer alloc initial	@ 0x1c01ce40:	Ok
+Layer gap8_BNReluConvolution0 0 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution1 1 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution2 2 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution3 3 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution4 4 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution5 5 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution6 6 ended:
+Checking layer: Checksum OK
+Layer gap8_ReluQAddition7 7 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution8 8 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution9 9 ended:
+Checking layer: Checksum OK
+Layer gap8_ReluQAddition10 10 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution11 11 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution12 12 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution13 13 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution14 14 ended:
+Checking layer: Checksum OK
+Layer gap8_ReluQAddition15 15 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution16 16 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution17 17 ended:
+Checking layer: Checksum OK
+Layer gap8_ReluQAddition18 18 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution19 19 ended:
+Checking layer: Checksum OK
+Layer gap8_BNReluConvolution20 20 ended:
+Checking layer: Checksum OK
+Layer gap8_ReluQAddition21 21 ended:
+Checking layer: Checksum OK
+
+Final performance:
+  - num cycles: 12320727
+  - MACs: 16192000
+  - MAC/cycle: 1.31421
+  - n. of Cores: 7

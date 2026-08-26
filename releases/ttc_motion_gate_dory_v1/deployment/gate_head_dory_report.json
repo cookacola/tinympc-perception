@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/integer/gate_head/gate_head_int.onnx",
+  "dory_frontend": "NEMO",
+  "dory_frontend_nodes": 8,
+  "frontend_node_names": [
+    "Convolution",
+    "BNRelu",
+    "Convolution",
+    "BNRelu",
+    "Convolution",
+    "BNRelu",
+    "Convolution",
+    "BNRelu"
+  ],
+  "single_output_graph": true,
+  "gap8_backend_tiling_passed": true,
+  "gap8_fused_hardware_nodes": 4,
+  "gap8_total_macs": 1190400,
+  "gap8_max_l1_tile_bytes_estimate": 33280,
+  "gap8_l1_capacity_bytes": 64000,
+  "gap8_final_output_bits": 8,
+  "gap8_final_output_bytes": 3200,
+  "expected_final_output_bytes": 3200,
+  "gap8_final_output_checksums": [
+    74091
+  ],
+  "gap8_bnrelu_constant_bits": 64,
+  "overflow_safe_affine_intermediate": true,
+  "activation_checksums_loaded": true,
+  "golden_activation_files": 4,
+  "activation_checksums_skipped": false,
+  "remaining_gate": "compile generated C and run GVSOC/physical GAP8 parity",
+  "generated_c_passed": true,
+  "generated_app_dir": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu_deployment_v2/gate_head_gap8_application",
+  "generated_files": 46
+}

@@ -1,0 +1,23 @@
+{
+  "gate": {
+    "heatmap_peak_cell_displacement_mean": 4.690520221941861,
+    "heatmap_peak_cell_displacement_p95": 16.1245154965971,
+    "heatmap_peak_cell_exact_agreement": 0.15625,
+    "heatmap_peak_cell_exact_count": 160,
+    "heatmap_peak_cell_total": 1024,
+    "visibility_probability_mae": 0.1025503655745427,
+    "visibility_threshold": 0.5,
+    "visibility_thresholded_agreement": 0.90625,
+    "visibility_thresholded_agreement_count": 928,
+    "visibility_thresholded_total": 1024
+  },
+  "samples": 256,
+  "ttc": {
+    "flow_epe_mean": 0.23788804255285723,
+    "flow_mae": 0.14932784666562385,
+    "inverse_depth_softplus_mae": 0.22882805365410902,
+    "inverse_ttc_softplus_mae": 0.23693135241438912,
+    "risk_critical_probability_mae": 0.06825098886766462,
+    "risk_softmax_class_agreement": 0.851767578125
+  }
+}

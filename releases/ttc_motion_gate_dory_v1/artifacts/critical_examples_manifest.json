@@ -1,0 +1,76 @@
+{
+  "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+  "initialization": {
+    "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+    "epoch": 0,
+    "ttc_refinements": 3
+  },
+  "threshold": 0.5723660588264465,
+  "examples": [
+    {
+      "score": 1.995,
+      "dataset_index": 6155,
+      "truth_critical_pixels": 400,
+      "predicted_critical_pixels": 398,
+      "precision": 1.0,
+      "recall": 0.995,
+      "tp": 398,
+      "fp": 0,
+      "fn": 2,
+      "category": "true_positive",
+      "file": "true_positive.png"
+    },
+    {
+      "score": 1.0,
+      "dataset_index": 6155,
+      "truth_critical_pixels": 400,
+      "predicted_critical_pixels": 398,
+      "precision": 1.0,
+      "recall": 0.995,
+      "tp": 398,
+      "fp": 0,
+      "fn": 2,
+      "category": "dense_critical",
+      "file": "dense_critical.png"
+    },
+    {
+      "score": 0.0,
+      "dataset_index": 291,
+      "truth_critical_pixels": 20,
+      "predicted_critical_pixels": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 20,
+      "category": "critical_miss",
+      "file": "critical_miss.png"
+    },
+    {
+      "score": 0.0,
+      "dataset_index": 0,
+      "truth_critical_pixels": 0,
+      "predicted_critical_pixels": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "category": "safe_correct",
+      "file": "safe_correct.png"
+    },
+    {
+      "score": 0.5975,
+      "dataset_index": 6156,
+      "truth_critical_pixels": 0,
+      "predicted_critical_pixels": 239,
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0,
+      "fp": 239,
+      "fn": 0,
+      "category": "false_alarm",
+      "file": "false_alarm.png"
+    }
+  ]
+}

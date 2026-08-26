@@ -1,0 +1,57 @@
+{
+  "format": "dory-motion-gate-ttc-bridge-v1",
+  "checkpoint": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/dory_motion_gate_ttc_refined_best.pt",
+  "checkpoint_sha256": "24c36229bdfedb755726c811d2812bf0b10cf337c32cd1c2718c2ffbec302adc",
+  "source_epoch": 0,
+  "ttc_refinements": 3,
+  "checkpoint_ttc_refinements": 3,
+  "compaction": {
+    "source_ttc_refinements": 3,
+    "deployed_ttc_refinements": 3,
+    "pruned_identity_blocks": [],
+    "max_abs_output_difference": 0.0
+  },
+  "state_shift": 4.0,
+  "graphs": {
+    "encoder": {
+      "input": [
+        2,
+        160,
+        160
+      ],
+      "output": [
+        64,
+        20,
+        20
+      ]
+    },
+    "gate_head": {
+      "input": [
+        64,
+        20,
+        20
+      ],
+      "output": [
+        8,
+        20,
+        20
+      ]
+    },
+    "ttc_head": {
+      "input": [
+        74,
+        20,
+        20
+      ],
+      "output": [
+        7,
+        20,
+        20
+      ]
+    }
+  },
+  "sample_counts": {
+    "calibration": 128,
+    "parity": 256
+  }
+}

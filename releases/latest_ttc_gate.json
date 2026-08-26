@@ -1,0 +1,10 @@
+{
+  "format": "tinympc-ttc-gate-release-pointer-v1",
+  "name": "ttc_motion_gate_dory_v1",
+  "release": "ttc_motion_gate_dory_v1",
+  "checkpoint": "ttc_motion_gate_dory_v1/model/ttc_motion_gate_dory_v1.pt",
+  "checkpoint_sha256": "24c36229bdfedb755726c811d2812bf0b10cf337c32cd1c2718c2ffbec302adc",
+  "status": "recommended_float_research_checkpoint",
+  "dory_status": "nemo_dory_gap8_gvsoc_checksum_passed",
+  "quantized_status": "acceptance_only_qat_required_before_flight"
+}

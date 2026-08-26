@@ -1,0 +1,89 @@
+{
+  "format": "dory-partitioned-motion-gate-ttc-static-audit-v1",
+  "allowed_operators": [
+    "Add",
+    "Constant",
+    "Conv",
+    "Identity",
+    "Relu"
+  ],
+  "graphs": {
+    "encoder": {
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/static_dory_audit_trained/encoder_float.onnx",
+      "inputs": 1,
+      "outputs": 1,
+      "input_shape": [
+        1,
+        2,
+        160,
+        160
+      ],
+      "output_shape": [
+        1,
+        64,
+        20,
+        20
+      ],
+      "operators": [
+        "Add",
+        "Conv",
+        "Relu"
+      ],
+      "unsupported_operators": [],
+      "passed": true
+    },
+    "gate_head": {
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/static_dory_audit_trained/gate_head_float.onnx",
+      "inputs": 1,
+      "outputs": 1,
+      "input_shape": [
+        1,
+        64,
+        20,
+        20
+      ],
+      "output_shape": [
+        1,
+        8,
+        20,
+        20
+      ],
+      "operators": [
+        "Conv",
+        "Relu"
+      ],
+      "unsupported_operators": [],
+      "passed": true
+    },
+    "ttc_head": {
+      "onnx": "/home/cchen/isaacsim-workspace/workspace/ttc_pilot_100k_dory_sequential_critical_v7_cpu/static_dory_audit_trained/ttc_head_float.onnx",
+      "inputs": 1,
+      "outputs": 1,
+      "input_shape": [
+        1,
+        74,
+        20,
+        20
+      ],
+      "output_shape": [
+        1,
+        7,
+        20,
+        20
+      ],
+      "operators": [
+        "Add",
+        "Conv",
+        "Relu"
+      ],
+      "unsupported_operators": [],
+      "passed": true
+    }
+  },
+  "passed": true,
+  "remaining_acceptance": [
+    "NeMO int8 quantization and integer parity",
+    "installed DORY frontend and GAP8 tiler",
+    "GVSOC checksum parity"
+  ]
+}
