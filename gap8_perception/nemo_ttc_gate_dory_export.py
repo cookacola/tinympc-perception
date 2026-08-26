@@ -107,13 +107,10 @@ class TTCHead(nn.Module):
         self.deep = nn.Sequential(
             *([ResidualDS(64) for _ in range(refinements)] + [DSConv(64, 32)])
         )
-        self.shortcut = ConvBNReLU(74, 32, 1)
-        self.add = base.nemo.quant.pact.PACT_IntegerAdd()
-        self.relu = nn.ReLU(inplace=False)
         self.output_proj = terminal(32, 7)
 
     def forward_features(self, packed):
-        return self.relu(self.add(self.deep(self.adapter(packed)), self.shortcut(packed)))
+        return self.deep(self.adapter(packed))
 
     def forward_logits(self, packed):
         features = self.forward_features(packed)
@@ -147,12 +144,11 @@ def load_ttc(model, archive_path, state_shift):
             state[key] = torch.from_numpy(archive[key])
     state["output_proj.0.weight"] = torch.from_numpy(archive["output.weight"])
     identity_terminal(state, "output_proj", torch.from_numpy(archive["output.bias"]))
-    # The host encodes signed state s as s+shift. Absorb W*shift into the two
-    # first-layer BN means so the float function remains exactly unchanged.
-    for prefix in ("adapter", "shortcut"):
-        weight = state[prefix + ".0.weight"][:, 64:, 0, 0]
-        contribution = weight.sum(1) * state_shift
-        state[prefix + ".1.running_mean"] += contribution
+    # The host encodes signed state s as s+shift. Absorb W*shift into the
+    # adapter BN mean so the float function remains exactly unchanged.
+    weight = state["adapter.0.weight"][:, 64:, 0, 0]
+    contribution = weight.sum(1) * state_shift
+    state["adapter.1.running_mean"] += contribution
     model.load_state_dict(state)
 
 
