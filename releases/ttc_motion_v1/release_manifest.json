@@ -1,0 +1,54 @@
+{
+  "format": "tinympc-motion-ttc-release-v1",
+  "name": "ttc_motion_v1",
+  "status": "latest_recommended_ttc",
+  "checkpoint": "model/ttc_motion_v1_epoch20.pt",
+  "selection": {
+    "epoch": 20,
+    "parameters": 29191,
+    "dataset_samples": {
+      "train": 74106,
+      "validation": 16829,
+      "test": 14040
+    }
+  },
+  "observation_abi": {
+    "images": [2, 160, 160],
+    "onboard_state": [10],
+    "onboard_order": [
+      "body_velocity_xyz_mps",
+      "angular_velocity_xyz_rps",
+      "gravity_body_xyz_unit",
+      "frame_dt_s"
+    ]
+  },
+  "output_abi": {
+    "inverse_ttc": [1, 20, 20],
+    "inverse_depth_aux": [1, 20, 20],
+    "rigid_flow_aux": [2, 20, 20],
+    "risk_logits": [3, 20, 20]
+  },
+  "provenance": {
+    "training_workspace_commit": "045ca8b59622b99a408092124377c66346e8d9c2",
+    "training_job_id": "6141",
+    "dataset": "ttc_pilot_100k_isaacsim_v1_kinematic",
+    "dataset_manifest_sha256": "08c6c68cdde7e80e9ac1be3ade93882484076de3f2a179cf1c64d00a61c4d702"
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1652,
+      "sha256": "613de570baa351eb716bcfa7433f9e9510748d9da13bfa3e5fa4464b8b460d01"
+    },
+    {
+      "path": "model/ttc_motion_v1_epoch20.pt",
+      "bytes": 691243,
+      "sha256": "9f25de2c5d302ae8776e36f487ef0bbbd16d8aa8c752521984936afc0c6a82b0"
+    },
+    {
+      "path": "metrics/test_results.json",
+      "bytes": 588864,
+      "sha256": "1593fc0812085bede93a3ee49e55fe28a6bd855e2768ca97759460b3af80c66e"
+    }
+  ]
+}

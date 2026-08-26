@@ -1,0 +1,8 @@
+{
+  "format": "tinympc-perception-latest-model-v1",
+  "kind": "motion_conditioned_inverse_ttc",
+  "release": "ttc_motion_v1",
+  "checkpoint": "ttc_motion_v1/model/ttc_motion_v1_epoch20.pt",
+  "sha256": "9f25de2c5d302ae8776e36f487ef0bbbd16d8aa8c752521984936afc0c6a82b0",
+  "selection": "validation_selected_epoch_20"
+}
