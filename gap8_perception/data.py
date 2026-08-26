@@ -121,6 +121,16 @@ class MultiTaskDataset(Dataset):
             np.float32
         )
         gate = target["gate_opening_u8"][local].astype(np.float32)
+        if "gate_opening_sdf_f16" in target:
+            gate_sdf = target["gate_opening_sdf_f16"][local].astype(np.float32)
+        else:
+            inside = gate.astype(np.uint8)
+            gate_sdf = np.clip(
+                (cv2.distanceTransform(inside, cv2.DIST_L2, 5)
+                 - cv2.distanceTransform(1 - inside, cv2.DIST_L2, 5)) / 8.0,
+                -1.0,
+                1.0,
+            ).astype(np.float32)
         if self.augment:
             (
                 mono,
@@ -151,6 +161,7 @@ class MultiTaskDataset(Dataset):
             "time_to_collision_s": torch.from_numpy(ttc.copy()).unsqueeze(0),
             "vehicle_state": torch.from_numpy(vehicle_state.copy()),
             "gate": torch.from_numpy(gate.copy()).unsqueeze(0),
+            "gate_sdf": torch.from_numpy(gate_sdf.copy()).unsqueeze(0),
             "global_index": int(target["global_indices_i32"][local]),
             "state_variant": variant,
             "gate_index": int(target["gate_index_i8"][local]),

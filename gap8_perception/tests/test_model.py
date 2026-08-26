@@ -1,6 +1,8 @@
 import torch
 
 from gap8_perception.model import Gap8MultiTaskNet
+from gap8_perception.train_gate_tap_ablation import GateTapNet
+from gap8_perception.espnet_frozen_heads import ESPNetV2LiteEncoder, encoder_fingerprint
 
 
 def test_output_shapes_with_gate():
@@ -52,3 +54,22 @@ def test_cnn_is_image_only_for_stock_dory_frontend():
     assert torch.allclose(slow_output["urgency"], fast_output["urgency"])
     assert torch.allclose(slow_output["corners"], fast_output["corners"])
     assert torch.allclose(slow_output["gate"], fast_output["gate"])
+
+
+def test_gate_taps_produce_common_resolution_and_gradients():
+    for tap in ("early80", "mid40", "late40"):
+        model = GateTapNet(tap)
+        output = model(torch.rand(2, 1, 160, 160))
+        assert output.shape == (2, 1, 40, 40)
+        output.mean().backward()
+        assert any(parameter.grad is not None for parameter in model.parameters())
+
+
+def test_espnet_taps_and_fingerprint_are_stable():
+    model = ESPNetV2LiteEncoder(2).eval()
+    before = encoder_fingerprint(model)
+    early, middle, late = model(torch.rand(2, 2, 160, 160))
+    assert early.shape == (2, 32, 40, 40)
+    assert middle.shape == (2, 64, 20, 20)
+    assert late.shape == (2, 96, 10, 10)
+    assert encoder_fingerprint(model) == before

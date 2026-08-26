@@ -9,7 +9,12 @@ import numpy as np
 GATE_CENTERS_WORLD = np.asarray(
     [(-1.30, -0.45, 0.55), (1.30, 0.45, 0.55)], dtype=np.float64
 )
+GATE_OUTER_M = 0.66
 GATE_OPENING_M = 0.45
+# The real-flight labels mark the fabric centerline corner, not the clear
+# opening. Match that convention by averaging corresponding inner/outer
+# corner coordinates in the planar gate frame.
+GATE_CORNER_MIDLINE_M = (GATE_OUTER_M + GATE_OPENING_M) / 2.0
 
 # Right-handed gate frame: +x is world +y, +y is world -z (image-like down
 # near a front view), and +z is world -x.
@@ -36,7 +41,7 @@ def gate_projection(
     camera_matrix: np.ndarray,
     distortion: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    half = GATE_OPENING_M / 2.0
+    half = GATE_CORNER_MIDLINE_M / 2.0
     local = np.asarray(
         [(-half, -half, 0), (half, -half, 0),
          (half, half, 0), (-half, half, 0)],

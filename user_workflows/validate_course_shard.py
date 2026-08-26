@@ -12,7 +12,11 @@ import numpy as np
 parser = argparse.ArgumentParser()
 parser.add_argument("--shard", type=Path, required=True)
 parser.add_argument("--expected", type=int, required=True)
+parser.add_argument("--allow-no-gates", action="store_true")
 args = parser.parse_args()
+# Preserve a small, high-contrast low-light tail for domain randomization while
+# rejecting the earlier near-black frames (mean intensity around 17--20).
+MINIMUM_USEFUL_MEAN = 30.0
 
 
 def numbered(pattern):
@@ -47,7 +51,7 @@ for index, (rgb_path, depth_path, semantic_path) in enumerate(
         continue
     rgb_mean = float(rgb.mean())
     rgb_variance = float(rgb.var())
-    if rgb_mean <= 20 or rgb_variance <= 15:
+    if rgb_mean <= MINIMUM_USEFUL_MEAN or rgb_variance <= 15:
         errors.append(
             f"{index}: unusable RGB mean={rgb_mean:.2f} variance={rgb_variance:.2f}"
         )
@@ -82,7 +86,9 @@ for index, (rgb_path, depth_path, semantic_path) in enumerate(
 eyes = np.asarray([pose["eye_m"] for pose in poses], dtype=np.float64)
 if len(eyes) > 1 and np.min(np.ptp(eyes, axis=0)) < 0.1:
     errors.append("camera poses lack diversity")
-required_classes = {"course", "boundary", "obstacle", "gate"}
+required_classes = {"course", "boundary", "obstacle"}
+if not args.allow_no_gates:
+    required_classes.add("gate")
 missing_classes = sorted(required_classes - observed_classes)
 if missing_classes:
     errors.append(f"semantic classes absent from shard: {missing_classes}")

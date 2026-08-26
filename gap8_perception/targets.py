@@ -55,11 +55,35 @@ def class_mask(semantic_path: Path, labels_path: Path, classes: set[str]) -> np.
     return np.isin(semantic, raw_ids).astype(np.uint8)
 
 
+def _ordered_quad(contour: np.ndarray) -> np.ndarray:
+    perimeter = cv2.arcLength(contour, True)
+    polygon = cv2.approxPolyDP(contour, 0.04 * perimeter, True).reshape(-1, 2)
+    if len(polygon) != 4:
+        polygon = cv2.boxPoints(cv2.minAreaRect(contour))
+    polygon = polygon.astype(np.float32)
+    center = polygon.mean(axis=0)
+    top = polygon[polygon[:, 1] <= center[1]]
+    bottom = polygon[polygon[:, 1] > center[1]]
+    if len(top) != 2 or len(bottom) != 2:
+        return np.full((4, 2), np.nan, dtype=np.float32)
+    return np.asarray(
+        [
+            top[np.argmin(top[:, 0])],
+            top[np.argmax(top[:, 0])],
+            bottom[np.argmax(bottom[:, 0])],
+            bottom[np.argmin(bottom[:, 0])],
+        ],
+        dtype=np.float32,
+    )
+
+
 def gate_opening_and_corners(gate_frame: np.ndarray) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Extract the largest enclosed gate opening and ordered raster corners.
+    """Extract the opening and fabric-centerline corners of the largest gate.
 
     This intentionally returns invalid for partial/occluded gates whose opening
-    is not a closed hole in the semantic gate-frame mask.
+    is not a closed hole in the semantic gate-frame mask. Corner supervision
+    follows the real-flight convention: each target is halfway between the
+    corresponding clear-opening corner and outer frame corner.
     """
     contours, hierarchy = cv2.findContours(
         gate_frame, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
@@ -69,32 +93,24 @@ def gate_opening_and_corners(gate_frame: np.ndarray) -> tuple[np.ndarray, np.nda
     if hierarchy is None:
         return opening, corners, False
     holes = [
-        contour
-        for contour, node in zip(contours, hierarchy[0])
+        (index, contour, node)
+        for index, (contour, node) in enumerate(zip(contours, hierarchy[0]))
         if node[3] >= 0 and cv2.contourArea(contour) >= 16
     ]
     if not holes:
         return opening, corners, False
-    hole = max(holes, key=cv2.contourArea)
+    _, hole, hole_node = max(holes, key=lambda item: cv2.contourArea(item[1]))
+    outer_index = int(hole_node[3])
+    if outer_index < 0:
+        return opening, corners, False
+    outer = contours[outer_index]
     cv2.drawContours(opening, [hole], -1, 1, thickness=cv2.FILLED)
 
-    perimeter = cv2.arcLength(hole, True)
-    polygon = cv2.approxPolyDP(hole, 0.04 * perimeter, True).reshape(-1, 2)
-    if len(polygon) != 4:
-        polygon = cv2.boxPoints(cv2.minAreaRect(hole)).astype(np.float32)
-    else:
-        polygon = polygon.astype(np.float32)
-    center = polygon.mean(axis=0)
-    top = polygon[polygon[:, 1] <= center[1]]
-    bottom = polygon[polygon[:, 1] > center[1]]
-    if len(top) != 2 or len(bottom) != 2:
+    inner_corners = _ordered_quad(hole)
+    outer_corners = _ordered_quad(outer)
+    if not np.isfinite(inner_corners).all() or not np.isfinite(outer_corners).all():
         return opening, corners, False
-    corners[:] = [
-        top[np.argmin(top[:, 0])],
-        top[np.argmax(top[:, 0])],
-        bottom[np.argmax(bottom[:, 0])],
-        bottom[np.argmin(bottom[:, 0])],
-    ]
+    corners[:] = 0.5 * (inner_corners + outer_corners)
     return opening, corners, reliable_gate_corner_view(corners)
 
 

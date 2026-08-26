@@ -53,6 +53,7 @@ def main():
     time_to_collision = np.full_like(minimum_clearance, -1)
     vehicle_state = np.zeros((len(monos), variants, 8), dtype=np.float32)
     gate_opening = np.zeros((len(monos), 40, 40), dtype=np.uint8)
+    gate_opening_sdf = np.zeros((len(monos), 40, 40), dtype=np.float16)
     corners = np.full((len(monos), 4, 2), np.nan, dtype=np.float16)
     corner_valid = np.zeros(len(monos), dtype=np.uint8)
     global_indices = np.zeros(len(monos), dtype=np.int32)
@@ -78,6 +79,12 @@ def main():
         gate_opening[row] = cv2.resize(
             opening, (40, 40), interpolation=cv2.INTER_AREA
         ) > 0
+        inside = gate_opening[row].astype(np.uint8)
+        signed_distance = (
+            cv2.distanceTransform(inside, cv2.DIST_L2, 5)
+            - cv2.distanceTransform(1 - inside, cv2.DIST_L2, 5)
+        )
+        gate_opening_sdf[row] = np.clip(signed_distance / 8.0, -1.0, 1.0)
         corners[row] = xy.astype(np.float16)
         corner_valid[row] = valid
         global_indices[row] = poses[local]["global_index"]
@@ -168,6 +175,7 @@ def main():
         vehicle_state_f32=vehicle_state,
         speed_variants_mps=np.asarray(speeds, np.float32),
         gate_opening_u8=gate_opening,
+        gate_opening_sdf_f16=gate_opening_sdf,
         corners_xy160_f16=corners,
         corner_valid_u8=corner_valid,
         global_indices_i32=global_indices,
