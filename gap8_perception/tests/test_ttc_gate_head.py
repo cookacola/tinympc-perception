@@ -12,6 +12,10 @@ from gap8_perception.ttc_motion_gate_model import (
     MotionConditionedESPNetGateTTCNet,
     MotionConditionedESPNetInverseTTCNet,
 )
+from gap8_perception.audit_ttc_gate_dory_graphs import audit_graphs
+from gap8_perception.ttc_motion_gate_dory_model import (
+    DoryPartitionedMotionGateTTCNet,
+)
 from gap8_perception.ttc_motion_losses import parent_distillation_loss
 from gap8_perception.train_ttc_gate_joint_finetune import (
     TEST_LIMITS,
@@ -286,3 +290,33 @@ def test_retention_limits_require_all_parent_metrics():
         "critical_recall_at_0_552": 0.7410,
     }
     assert retention_passes(test_passing, TEST_LIMITS)
+
+
+def test_dory_partition_shapes_and_state_plane_packing():
+    model = DoryPartitionedMotionGateTTCNet().eval()
+    images = torch.randn(2, 2, 160, 160)
+    onboard = torch.tensor([
+        [3, -3, 0, 6, -6, 0, 1, -1, 0.5, 1 / 30],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ], dtype=torch.float32)
+    with torch.no_grad():
+        e2 = model.encoder(images)
+        packed = model.pack_ttc_input(e2, onboard)
+        output = model(images, onboard)
+    assert e2.shape == (2, 64, 20, 20)
+    assert packed.shape == (2, 74, 20, 20)
+    torch.testing.assert_close(packed[:, :64], e2)
+    assert torch.all(packed[0, 64] == 1.0)
+    assert torch.all(packed[0, 67] == 2.0)
+    assert torch.all(packed[0, 68] == -2.0)
+    assert torch.all(packed[0, 73] == 1.0)
+    assert output["gate_heatmap_logits"].shape == (2, 4, 20, 20)
+    assert output["gate_visibility_logits"].shape == (2, 4)
+    assert output["inverse_ttc"].shape == (2, 1, 20, 20)
+
+
+def test_all_three_deployment_graphs_use_only_stock_dory_operators(tmp_path):
+    report = audit_graphs(DoryPartitionedMotionGateTTCNet().eval(), tmp_path)
+    assert report["passed"]
+    assert set(report["graphs"]) == {"encoder", "gate_head", "ttc_head"}
+    assert all(graph["inputs"] == 1 for graph in report["graphs"].values())
