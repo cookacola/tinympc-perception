@@ -197,7 +197,7 @@ def train_epoch(model, loader, optimizer, device):
         loss.backward()
         optimizer.step()
         count = target["images"].shape[0]
-        total += float(loss) * count
+        total += float(loss.detach()) * count
         examples += count
     return total / max(examples, 1)
 

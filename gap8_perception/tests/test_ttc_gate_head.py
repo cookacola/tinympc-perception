@@ -11,6 +11,11 @@ from gap8_perception.ttc_motion_gate_model import (
     MotionConditionedESPNetGateTTCNet,
     MotionConditionedESPNetInverseTTCNet,
 )
+from gap8_perception.ttc_motion_losses import parent_distillation_loss
+from gap8_perception.train_ttc_gate_joint_finetune import (
+    configure_trainable,
+    retention_passes,
+)
 
 
 def test_gate_model_warm_starts_v1_and_preserves_parent_outputs(tmp_path):
@@ -142,3 +147,46 @@ def test_gate_sampler_reproduces_predeclared_visible_count_masses():
         selected = slice(count * 3, count * 3 + 3)
         assert np.isclose(weights[selected].sum(), mass)
         assert np.isclose(summary["expected_visible_count_mass"][str(count)], mass)
+
+
+def test_parent_distillation_is_zero_for_identical_outputs():
+    output = {
+        "inverse_ttc": torch.randn(2, 1, 20, 20),
+        "inverse_depth": torch.randn(2, 1, 20, 20),
+        "flow": torch.randn(2, 2, 20, 20),
+        "risk_logits": torch.randn(2, 3, 20, 20),
+    }
+    total, parts = parent_distillation_loss(output, output)
+    assert total.abs() < 1e-6
+    assert all(value.abs() < 1e-6 for value in parts.values())
+
+
+def test_joint_phase_unfreezes_only_gate_and_last_e2_block():
+    model = MotionConditionedESPNetGateTTCNet()
+    gate, encoder = configure_trainable(model)
+    assert sum(parameter.numel() for parameter in gate) == 3944
+    assert sum(parameter.numel() for parameter in encoder) > 0
+    trainable_names = {
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    }
+    assert all(
+        name.startswith("gate_decoder.") or name.startswith("encoder.stage2.1.")
+        for name in trainable_names
+    )
+    assert any(name.startswith("encoder.stage2.1.") for name in trainable_names)
+
+
+def test_retention_limits_require_all_parent_metrics():
+    passing = {
+        "inverse_ttc_mae_s_inv": 0.16,
+        "approaching_inverse_ttc_mae_s_inv": 0.18,
+        "inverse_depth_mae_m_inv": 0.23,
+        "flow_epe_cells": 0.13,
+        "critical_precision_at_0_552": 0.70,
+        "critical_recall_at_0_552": 0.74,
+    }
+    assert retention_passes(passing)
+    for name in passing:
+        failing = dict(passing)
+        failing[name] = 0.0 if name.startswith("critical_") else 1.0
+        assert not retention_passes(failing)
