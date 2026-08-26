@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -81,15 +82,18 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--precision-targets", type=float, nargs="+", default=(0.60, 0.65, 0.70))
     args = parser.parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type != "cuda":
-        raise RuntimeError("threshold calibration requires a Slurm GPU allocation")
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available in this allocation")
+    if device.type == "cpu":
+        torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     model, initialization = load_dory_checkpoint(args.checkpoint, device)
     options = dict(
         batch_size=args.batch_size, shuffle=False, num_workers=args.workers,
-        pin_memory=True, persistent_workers=args.workers > 0,
+        pin_memory=device.type == "cuda", persistent_workers=args.workers > 0,
     )
     validation_probability, validation_truth = collect(
         model, DataLoader(TTCGateDataset(args.dataset, "validation"), **options), device

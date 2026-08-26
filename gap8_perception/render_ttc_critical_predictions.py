@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import cv2
@@ -144,6 +145,7 @@ def main():
     parser.add_argument("--precision-target", default="0.65")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     args = parser.parse_args()
     if args.threshold_json:
         calibration = json.loads(args.threshold_json.read_text())
@@ -151,9 +153,11 @@ def main():
             args.precision_target
         ]["threshold"]
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type != "cuda":
-        raise RuntimeError("critical rendering requires a Slurm GPU allocation")
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available in this allocation")
+    if device.type == "cpu":
+        torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     model, initialization = load_dory_checkpoint(args.checkpoint, device)
     model.eval()
     dataset = TTCGateDataset(args.dataset, "test")

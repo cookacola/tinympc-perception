@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import cv2
@@ -146,14 +147,17 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--maximum-gate-distance-m", type=float, default=8.0)
     parser.add_argument("--minimum-gate-span-px", type=float, default=16.0)
     parser.add_argument("--minimum-gate-area-px2", type=float, default=256.0)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type != "cuda":
-        raise RuntimeError("render selection requires a Slurm GPU allocation")
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available in this allocation")
+    if device.type == "cpu":
+        torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
     dataset = TTCGateDataset(
         args.dataset, "test",
         maximum_gate_distance_m=args.maximum_gate_distance_m,
