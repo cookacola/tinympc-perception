@@ -16,7 +16,11 @@ import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from .ttc_gate_data import TTCGateDataset, gate_sampling_weights
-from .ttc_gate_losses import gate_perception_loss, softargmax_gate_coordinates
+from .ttc_gate_losses import (
+    gate_perception_loss,
+    peak_gate_coordinates,
+    softargmax_gate_coordinates,
+)
 from .ttc_motion_gate_model import (
     MotionConditionedESPNetGateTTCNet,
     MotionConditionedESPNetInverseTTCNet,
@@ -86,6 +90,7 @@ def empty_metrics():
         "parts": {},
         "visible_corners": 0,
         "error_sum_px": 0.0,
+        "softargmax_error_sum_px": 0.0,
         "pck4": 0,
         "pck8": 0,
         "pck12": 0,
@@ -109,12 +114,17 @@ def update_metrics(accumulator, prediction, target, loss, parts):
     for name, value in parts.items():
         accumulator["parts"].setdefault(name, 0.0)
         accumulator["parts"][name] += float(value) * batch_size
-    coordinates = softargmax_gate_coordinates(prediction["gate_heatmap_logits"])
+    coordinates = peak_gate_coordinates(prediction["gate_heatmap_logits"])
+    soft_coordinates = softargmax_gate_coordinates(prediction["gate_heatmap_logits"])
     error = torch.linalg.vector_norm(coordinates - target["gate_corners_px"], dim=-1)
+    soft_error = torch.linalg.vector_norm(
+        soft_coordinates - target["gate_corners_px"], dim=-1
+    )
     visible = target["gate_corners_visible"].bool()
     predicted_visible = prediction["gate_visibility_logits"] >= 0.0
     accumulator["visible_corners"] += int(visible.sum())
     accumulator["error_sum_px"] += float(error[visible].sum())
+    accumulator["softargmax_error_sum_px"] += float(soft_error[visible].sum())
     accumulator["pck4"] += int(((error <= 4.0) & visible).sum())
     accumulator["pck8"] += int(((error <= 8.0) & visible).sum())
     accumulator["pck12"] += int(((error <= 12.0) & visible).sum())
@@ -158,6 +168,9 @@ def finalize_metrics(accumulator):
         **{name: value / examples for name, value in accumulator["parts"].items()},
         "visible_corners": accumulator["visible_corners"],
         "corner_mae_px": accumulator["error_sum_px"] / visible,
+        "global_softargmax_corner_mae_px": (
+            accumulator["softargmax_error_sum_px"] / visible
+        ),
         "pck4": accumulator["pck4"] / visible,
         "pck8": accumulator["pck8"] / visible,
         "pck12": accumulator["pck12"] / visible,

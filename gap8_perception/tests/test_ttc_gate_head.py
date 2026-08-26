@@ -5,6 +5,7 @@ from gap8_perception.ttc_gate_data import TTCGateDataset, gate_sampling_weights
 from gap8_perception.ttc_gate_losses import (
     gate_heatmap_targets,
     gate_perception_loss,
+    peak_gate_coordinates,
     softargmax_gate_coordinates,
 )
 from gap8_perception.ttc_motion_gate_model import (
@@ -80,6 +81,7 @@ def test_heatmap_targets_follow_tl_tr_br_bl_order_and_decode_to_cell_centers():
         logits[0, corner].view(-1)[index] = 20.0
     decoded = softargmax_gate_coordinates(logits)
     torch.testing.assert_close(decoded, corners, atol=1e-4, rtol=0)
+    torch.testing.assert_close(peak_gate_coordinates(logits), corners, atol=0, rtol=0)
 
 
 def test_invisible_corner_masks_heatmap_and_coordinate_losses():

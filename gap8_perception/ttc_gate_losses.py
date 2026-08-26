@@ -37,6 +37,19 @@ def softargmax_gate_coordinates(heatmap_logits):
     return torch.stack((x, y), dim=-1)
 
 
+def peak_gate_coordinates(heatmap_logits):
+    """Decode the maximum heatmap cell to its center in native 160px coordinates."""
+    batch, corners, height, width = heatmap_logits.shape
+    if (height, width) != (OUTPUT_SIZE, OUTPUT_SIZE):
+        raise ValueError(f"expected 20x20 heatmaps, received {(height, width)}")
+    peak = heatmap_logits.flatten(2).argmax(-1)
+    x = (peak.remainder(width).to(heatmap_logits.dtype) * CELL_SIZE
+         + (CELL_SIZE - 1.0) / 2.0)
+    y = (torch.div(peak, width, rounding_mode="floor").to(heatmap_logits.dtype) * CELL_SIZE
+         + (CELL_SIZE - 1.0) / 2.0)
+    return torch.stack((x, y), dim=-1)
+
+
 def _masked_mean(values, mask):
     mask = mask.to(values.dtype)
     return (values * mask).sum() / mask.sum().clamp_min(1.0)
