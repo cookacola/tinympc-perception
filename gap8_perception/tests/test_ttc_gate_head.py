@@ -14,6 +14,7 @@ from gap8_perception.ttc_motion_gate_model import (
 )
 from gap8_perception.ttc_motion_losses import parent_distillation_loss
 from gap8_perception.train_ttc_gate_joint_finetune import (
+    TEST_LIMITS,
     configure_trainable,
     retention_passes,
 )
@@ -231,3 +232,12 @@ def test_retention_limits_require_all_parent_metrics():
         failing = dict(passing)
         failing[name] = 0.0 if name.startswith("critical_") else 1.0
         assert not retention_passes(failing)
+    test_passing = {
+        "inverse_ttc_mae_s_inv": 0.1502,
+        "approaching_inverse_ttc_mae_s_inv": 0.1660,
+        "inverse_depth_mae_m_inv": 0.1980,
+        "flow_epe_cells": 0.1220,
+        "critical_precision_at_0_552": 0.6820,
+        "critical_recall_at_0_552": 0.7410,
+    }
+    assert retention_passes(test_passing, TEST_LIMITS)

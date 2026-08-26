@@ -47,6 +47,14 @@ VALIDATION_LIMITS = {
     "critical_precision_at_0_552": 0.695,
     "critical_recall_at_0_552": 0.734,
 }
+TEST_LIMITS = {
+    "inverse_ttc_mae_s_inv": 0.15150342336117208,
+    "approaching_inverse_ttc_mae_s_inv": 0.16786268978708097,
+    "inverse_depth_mae_m_inv": 0.19982632630495535,
+    "flow_epe_cells": 0.12236654571224394,
+    "critical_precision_at_0_552": 0.6804023741992432,
+    "critical_recall_at_0_552": 0.7347273707953319,
+}
 
 
 def parse_args():
@@ -134,16 +142,16 @@ def finalize_ttc_metrics(accumulator):
     }
 
 
-def retention_passes(metrics):
+def retention_passes(metrics, limits=VALIDATION_LIMITS):
     return all(
         metrics[name] <= limit if name not in {
             "critical_precision_at_0_552", "critical_recall_at_0_552"
         } else metrics[name] >= limit
-        for name, limit in VALIDATION_LIMITS.items()
+        for name, limit in limits.items()
     )
 
 
-def evaluate(model, loader, device):
+def evaluate(model, loader, device, retention_limits=VALIDATION_LIMITS):
     model.eval()
     gate, ttc = empty_metrics(), empty_ttc_metrics()
     with torch.no_grad():
@@ -157,7 +165,8 @@ def evaluate(model, loader, device):
     return {
         "gate": finalize_metrics(gate),
         "ttc": ttc_result,
-        "retention_passed": retention_passes(ttc_result),
+        "retention_passed": retention_passes(ttc_result, retention_limits),
+        "retention_limits": retention_limits,
     }
 
 
@@ -273,6 +282,7 @@ def main():
         "distillation_weight": args.distillation_weight,
         "supervised_ttc_weight": args.supervised_ttc_weight,
         "validation_limits": VALIDATION_LIMITS,
+        "test_limits": TEST_LIMITS,
         "minimum_pck8_gain": args.minimum_pck8_gain,
         "phase_a_validation": baseline,
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
@@ -327,7 +337,7 @@ def main():
         "validation": final_validation,
         "validation_pck8_gain": gain,
         "promoted_over_phase_a": promoted,
-        "test": evaluate(model, test_loader, device) if promoted else None,
+        "test": evaluate(model, test_loader, device, TEST_LIMITS) if promoted else None,
         "history": history,
         "checkpoint": str(best_path.resolve()),
     }
