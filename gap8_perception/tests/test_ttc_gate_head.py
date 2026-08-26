@@ -297,6 +297,7 @@ def test_retention_limits_require_all_parent_metrics():
 
 def test_dory_partition_shapes_and_state_plane_packing():
     model = DoryPartitionedMotionGateTTCNet().eval()
+    assert not hasattr(model.ttc_head, "shortcut")
     images = torch.randn(2, 2, 160, 160)
     onboard = torch.tensor([
         [3, -3, 0, 6, -6, 0, 1, -1, 0.5, 1 / 30],
@@ -358,6 +359,18 @@ def test_dory_checkpoint_loader_infers_refinement_depth(tmp_path):
     assert report["ttc_refinements"] == 5
     assert all(torch.equal(original.state_dict()[key], value)
                for key, value in loaded.state_dict().items())
+
+
+def test_ttc_warm_start_accepts_equal_depth_and_ignores_removed_shortcut(tmp_path):
+    source = DoryPartitionedMotionGateTTCNet(ttc_refinements=3).eval()
+    state = dict(source.state_dict())
+    state["ttc_head.shortcut.legacy_tensor"] = torch.ones(1)
+    checkpoint = tmp_path / "legacy.pt"
+    torch.save({"epoch": 18, "model": state}, checkpoint)
+    target = DoryPartitionedMotionGateTTCNet(ttc_refinements=3).eval()
+    report = target.initialize_from_shallower_checkpoint(checkpoint)
+    assert report["new_residual_blocks_initialized_as_identity"] == 0
+    assert report["ignored_source_tensors"] == ["ttc_head.shortcut.legacy_tensor"]
 
 
 def test_critical_threshold_calibration_freezes_precision_constrained_choice():

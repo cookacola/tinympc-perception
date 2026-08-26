@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from .model import ConvBNReLU, DSConv, ElementwiseAdd, ResidualDS
+from .model import ConvBNReLU, DSConv, ResidualDS
 
 
 class DoryStage(nn.Sequential):
@@ -53,7 +53,12 @@ class DoryGateHead(nn.Module):
 
 
 class DoryMotionTTCHead(nn.Module):
-    """One-input graph over host-packed e2 and normalized state planes."""
+    """Sequential one-input graph over host-packed e2 and state planes.
+
+    Keep this graph free of a long shortcut from the raw 74-channel input. The
+    stock GAP8 backend can tile local residual blocks, but its branch-change
+    path corrupts that long skip when the two branches change channel count.
+    """
 
     input_shape = (74, 20, 20)
     output_shape = (7, 20, 20)
@@ -66,14 +71,10 @@ class DoryMotionTTCHead(nn.Module):
             *(ResidualDS(64) for _ in range(self.refinements)),
             DSConv(64, 32),
         )
-        self.shortcut = ConvBNReLU(74, 32, 1)
-        self.add = ElementwiseAdd()
-        self.relu = nn.ReLU(inplace=False)
         self.output = nn.Conv2d(32, 7, 1)
 
     def forward(self, packed_e2_and_state):
-        deep = self.deep(self.adapter(packed_e2_and_state))
-        return self.output(self.relu(self.add(deep, self.shortcut(packed_e2_and_state))))
+        return self.output(self.deep(self.adapter(packed_e2_and_state)))
 
 
 class DoryPartitionedMotionGateTTCNet(nn.Module):
@@ -182,7 +183,7 @@ class DoryPartitionedMotionGateTTCNet(nn.Module):
         if not source_blocks:
             raise RuntimeError("checkpoint does not contain residual TTC blocks")
         source_refinements = max(source_blocks) + 1
-        if source_refinements >= self.ttc_refinements:
+        if source_refinements > self.ttc_refinements:
             raise ValueError(
                 f"source has {source_refinements} refinements, target has {self.ttc_refinements}"
             )
@@ -214,6 +215,7 @@ class DoryPartitionedMotionGateTTCNet(nn.Module):
             "new_residual_blocks_initialized_as_identity": (
                 self.ttc_refinements - source_refinements
             ),
+            "ignored_source_tensors": sorted(set(source).difference(target)),
         }
 
 
