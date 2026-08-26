@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import copy
 
 import numpy as np
 import torch
@@ -221,4 +222,43 @@ def dory_graphs(model: DoryPartitionedMotionGateTTCNet):
         "encoder": model.encoder,
         "gate_head": model.gate_head,
         "ttc_head": model.ttc_head,
+    }
+
+
+def compact_identity_ttc_blocks(model: DoryPartitionedMotionGateTTCNet):
+    """Remove trailing residual blocks whose terminal BN is identically zero."""
+    identity = []
+    for index in range(model.ttc_refinements):
+        bn = model.ttc_head.deep[index].block.pointwise[1]
+        if torch.count_nonzero(bn.weight) == 0 and torch.count_nonzero(bn.bias) == 0:
+            identity.append(index)
+    if not identity:
+        return copy.deepcopy(model), {
+            "source_ttc_refinements": model.ttc_refinements,
+            "deployed_ttc_refinements": model.ttc_refinements,
+            "pruned_identity_blocks": [],
+        }
+    first = identity[0]
+    expected = list(range(first, model.ttc_refinements))
+    if identity != expected:
+        raise RuntimeError(f"only trailing identity blocks can be compacted: {identity}")
+    compact = DoryPartitionedMotionGateTTCNet(ttc_refinements=first)
+    source, target = model.state_dict(), compact.state_dict()
+    final_source = f"ttc_head.deep.{model.ttc_refinements}."
+    final_target = f"ttc_head.deep.{first}."
+    for key, value in source.items():
+        destination = (
+            final_target + key[len(final_source):]
+            if key.startswith(final_source)
+            else key
+        )
+        if destination in target and target[destination].shape == value.shape:
+            target[destination] = value.detach().cpu().clone()
+    compact.load_state_dict(target)
+    compact.train(model.training)
+    return compact, {
+        "source_ttc_refinements": model.ttc_refinements,
+        "deployed_ttc_refinements": first,
+        "pruned_identity_blocks": identity,
+        "function_change": "none; each pruned residual branch was identically zero",
     }

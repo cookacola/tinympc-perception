@@ -15,6 +15,7 @@ from gap8_perception.ttc_motion_gate_model import (
 from gap8_perception.audit_ttc_gate_dory_graphs import audit_graphs
 from gap8_perception.ttc_motion_gate_dory_model import (
     DoryPartitionedMotionGateTTCNet,
+    compact_identity_ttc_blocks,
 )
 from gap8_perception.ttc_motion_losses import parent_distillation_loss
 from gap8_perception.train_ttc_gate_joint_finetune import (
@@ -337,3 +338,9 @@ def test_deeper_dory_ttc_head_starts_as_exact_identity_expansion(tmp_path):
         deep_output = deep(images, onboard)
     for name in shallow_output:
         torch.testing.assert_close(shallow_output[name], deep_output[name], rtol=0, atol=0)
+    compact, compact_report = compact_identity_ttc_blocks(deep)
+    assert compact_report["deployed_ttc_refinements"] == 3
+    with torch.no_grad():
+        compact_output = compact(images, onboard)
+    for name in shallow_output:
+        torch.testing.assert_close(shallow_output[name], compact_output[name], rtol=0, atol=0)

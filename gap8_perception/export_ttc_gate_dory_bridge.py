@@ -11,7 +11,10 @@ import numpy as np
 import torch
 
 from .ttc_gate_data import TTCGateDataset
-from .ttc_motion_gate_dory_model import DoryPartitionedMotionGateTTCNet
+from .ttc_motion_gate_dory_model import (
+    DoryPartitionedMotionGateTTCNet,
+    compact_identity_ttc_blocks,
+)
 
 
 def sha256(path):
@@ -67,9 +70,22 @@ def main():
     refinements = max(blocks) + 1
     model = DoryPartitionedMotionGateTTCNet(ttc_refinements=refinements).eval()
     model.load_state_dict(state)
-    save_state(model.encoder, args.output / "encoder_float_state.npz")
-    save_state(model.gate_head, args.output / "gate_head_float_state.npz")
-    save_state(model.ttc_head, args.output / "ttc_head_float_state.npz")
+    deployment_model, compaction = compact_identity_ttc_blocks(model)
+    deployment_model.eval()
+    generator = torch.Generator().manual_seed(20260907)
+    images = torch.randn(2, 2, 160, 160, generator=generator)
+    onboard = torch.randn(2, 10, generator=generator)
+    with torch.no_grad():
+        reference = model(images, onboard)
+        compact_output = deployment_model(images, onboard)
+    max_difference = max(
+        float((reference[name] - compact_output[name]).abs().max()) for name in reference
+    )
+    if max_difference != 0.0:
+        raise RuntimeError(f"TTC block compaction changed outputs by {max_difference}")
+    save_state(deployment_model.encoder, args.output / "encoder_float_state.npz")
+    save_state(deployment_model.gate_head, args.output / "gate_head_float_state.npz")
+    save_state(deployment_model.ttc_head, args.output / "ttc_head_float_state.npz")
     records = {
         "calibration": sampled_records(
             TTCGateDataset(args.dataset, "train"), args.calibration_samples
@@ -84,7 +100,9 @@ def main():
         "checkpoint": str(args.checkpoint.resolve()),
         "checkpoint_sha256": sha256(args.checkpoint),
         "source_epoch": saved.get("epoch"),
-        "ttc_refinements": refinements,
+        "ttc_refinements": deployment_model.ttc_refinements,
+        "checkpoint_ttc_refinements": refinements,
+        "compaction": {**compaction, "max_abs_output_difference": max_difference},
         "state_shift": 4.0,
         "graphs": {
             "encoder": {"input": [2, 160, 160], "output": [64, 20, 20]},
