@@ -64,6 +64,9 @@ def parse_args():
     parser.add_argument("--distillation-weight", type=float, default=2.0)
     parser.add_argument("--supervised-ttc-weight", type=float, default=0.25)
     parser.add_argument("--minimum-pck8-gain", type=float, default=0.02)
+    parser.add_argument(
+        "--encoder-scope", choices=("last_e2", "all_mid"), default="last_e2"
+    )
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--minimum-epochs", type=int, default=4)
     parser.add_argument("--patience", type=int, default=3)
@@ -158,14 +161,23 @@ def evaluate(model, loader, device):
     }
 
 
-def configure_trainable(model):
+def configure_trainable(model, encoder_scope="last_e2"):
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     for parameter in model.gate_decoder.parameters():
         parameter.requires_grad_(True)
-    for parameter in model.encoder.stage2[1].parameters():
-        parameter.requires_grad_(True)
-    return list(model.gate_decoder.parameters()), list(model.encoder.stage2[1].parameters())
+    if encoder_scope == "last_e2":
+        encoder_modules = (model.encoder.stage2[1],)
+    elif encoder_scope == "all_mid":
+        encoder_modules = (model.encoder.stem, model.encoder.stage1, model.encoder.stage2)
+    else:
+        raise ValueError(f"unknown encoder scope {encoder_scope}")
+    encoder_parameters = []
+    for module in encoder_modules:
+        for parameter in module.parameters():
+            parameter.requires_grad_(True)
+            encoder_parameters.append(parameter)
+    return list(model.gate_decoder.parameters()), encoder_parameters
 
 
 def joint_training_mode(model):
@@ -226,7 +238,7 @@ def main():
     teacher.eval()
     for parameter in teacher.parameters():
         parameter.requires_grad_(False)
-    gate_parameters, encoder_parameters = configure_trainable(model)
+    gate_parameters, encoder_parameters = configure_trainable(model, args.encoder_scope)
     optimizer = torch.optim.AdamW([
         {"params": gate_parameters, "lr": args.gate_learning_rate},
         {"params": encoder_parameters, "lr": args.encoder_learning_rate},
@@ -253,7 +265,8 @@ def main():
         "sampling": sampling,
         "initialization": initialization,
         "parent_checkpoint": str(args.parent_checkpoint.resolve()),
-        "trainable": ["gate_decoder", "encoder.stage2.1"],
+        "trainable": ["gate_decoder", args.encoder_scope],
+        "encoder_scope": args.encoder_scope,
         "trainable_parameters": sum(parameter.numel() for parameter in gate_parameters + encoder_parameters),
         "gate_learning_rate": args.gate_learning_rate,
         "encoder_learning_rate": args.encoder_learning_rate,

@@ -203,6 +203,20 @@ def test_joint_phase_unfreezes_only_gate_and_last_e2_block():
     assert any(name.startswith("encoder.stage2.1.") for name in trainable_names)
 
 
+def test_all_mid_scope_unfreezes_stem_through_e2_but_not_deeper_ttc_path():
+    model = MotionConditionedESPNetGateTTCNet()
+    _gate, encoder = configure_trainable(model, "all_mid")
+    assert sum(parameter.numel() for parameter in encoder) > 2912
+    trainable_names = {
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    }
+    assert any(name.startswith("encoder.stem.") for name in trainable_names)
+    assert any(name.startswith("encoder.stage1.") for name in trainable_names)
+    assert any(name.startswith("encoder.stage2.") for name in trainable_names)
+    assert not any(name.startswith("encoder.stage3.") for name in trainable_names)
+    assert not any(name.startswith("project_e2.") for name in trainable_names)
+
+
 def test_retention_limits_require_all_parent_metrics():
     passing = {
         "inverse_ttc_mae_s_inv": 0.16,
