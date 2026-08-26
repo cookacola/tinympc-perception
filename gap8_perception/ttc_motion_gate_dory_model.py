@@ -57,11 +57,13 @@ class DoryMotionTTCHead(nn.Module):
     input_shape = (74, 20, 20)
     output_shape = (7, 20, 20)
 
-    def __init__(self):
+    def __init__(self, refinements: int = 3):
         super().__init__()
+        self.refinements = int(refinements)
         self.adapter = ConvBNReLU(74, 64, 1)
         self.deep = nn.Sequential(
-            ResidualDS(64), ResidualDS(64), ResidualDS(64), DSConv(64, 32)
+            *(ResidualDS(64) for _ in range(self.refinements)),
+            DSConv(64, 32),
         )
         self.shortcut = ConvBNReLU(74, 32, 1)
         self.add = ElementwiseAdd()
@@ -83,11 +85,12 @@ class DoryPartitionedMotionGateTTCNet(nn.Module):
     gate_visibility_semantics = "corner_is_in_front_of_camera_and_inside_image"
     deployment_graphs = ("encoder", "gate_head", "ttc_head")
 
-    def __init__(self):
+    def __init__(self, ttc_refinements: int = 3):
         super().__init__()
+        self.ttc_refinements = int(ttc_refinements)
         self.encoder = DoryTwoFrameEncoder()
         self.gate_head = DoryGateHead()
-        self.ttc_head = DoryMotionTTCHead()
+        self.ttc_head = DoryMotionTTCHead(self.ttc_refinements)
         self.register_buffer(
             "onboard_scale_tensor",
             torch.tensor(self.onboard_scale, dtype=torch.float32),
@@ -163,6 +166,53 @@ class DoryPartitionedMotionGateTTCNet(nn.Module):
             "encoder_tensors_loaded": len(loaded_encoder),
             "gate_tensors_loaded": len(loaded_gate),
             "fresh_modules": ["gate_head.output[4:8]", "ttc_head"],
+        }
+
+    def initialize_from_shallower_checkpoint(self, checkpoint: str | Path):
+        """Expand a trained TTC graph with identity-initialized residual blocks."""
+        checkpoint = Path(checkpoint)
+        saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        source = saved.get("model", saved)
+        source_blocks = sorted({
+            int(key.split(".")[2])
+            for key in source
+            if key.startswith("ttc_head.deep.") and ".block." in key
+        })
+        if not source_blocks:
+            raise RuntimeError("checkpoint does not contain residual TTC blocks")
+        source_refinements = max(source_blocks) + 1
+        if source_refinements >= self.ttc_refinements:
+            raise ValueError(
+                f"source has {source_refinements} refinements, target has {self.ttc_refinements}"
+            )
+        target = self.state_dict()
+        final_source_prefix = f"ttc_head.deep.{source_refinements}."
+        final_target_prefix = f"ttc_head.deep.{self.ttc_refinements}."
+        copied = []
+        for key, value in source.items():
+            destination = (
+                final_target_prefix + key[len(final_source_prefix):]
+                if key.startswith(final_source_prefix)
+                else key
+            )
+            if destination in target and target[destination].shape == value.shape:
+                target[destination] = value
+                copied.append(destination)
+        self.load_state_dict(target)
+        with torch.no_grad():
+            for index in range(source_refinements, self.ttc_refinements):
+                block = self.ttc_head.deep[index].block
+                block.pointwise[1].weight.zero_()
+                block.pointwise[1].bias.zero_()
+        return {
+            "checkpoint": str(checkpoint.resolve()),
+            "source_epoch": saved.get("epoch"),
+            "source_ttc_refinements": source_refinements,
+            "target_ttc_refinements": self.ttc_refinements,
+            "copied_tensors": len(copied),
+            "new_residual_blocks_initialized_as_identity": (
+                self.ttc_refinements - source_refinements
+            ),
         }
 
 

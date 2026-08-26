@@ -81,7 +81,16 @@ def main():
     model = DoryPartitionedMotionGateTTCNet()
     if args.checkpoint:
         saved = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-        model.load_state_dict(saved.get("model", saved))
+        state = saved.get("model", saved)
+        blocks = {
+            int(key.split(".")[2])
+            for key in state
+            if key.startswith("ttc_head.deep.") and ".block." in key
+        }
+        model = DoryPartitionedMotionGateTTCNet(
+            ttc_refinements=max(blocks) + 1 if blocks else 3
+        )
+        model.load_state_dict(state)
     report = audit_graphs(model.eval(), args.output_dir)
     (args.output_dir / "static_dory_audit.json").write_text(
         json.dumps(report, indent=2) + "\n"

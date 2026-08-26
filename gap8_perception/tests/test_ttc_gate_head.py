@@ -320,3 +320,20 @@ def test_all_three_deployment_graphs_use_only_stock_dory_operators(tmp_path):
     assert report["passed"]
     assert set(report["graphs"]) == {"encoder", "gate_head", "ttc_head"}
     assert all(graph["inputs"] == 1 for graph in report["graphs"].values())
+
+
+def test_deeper_dory_ttc_head_starts_as_exact_identity_expansion(tmp_path):
+    shallow = DoryPartitionedMotionGateTTCNet(ttc_refinements=3).eval()
+    checkpoint = tmp_path / "shallow.pt"
+    torch.save({"epoch": 23, "model": shallow.state_dict()}, checkpoint)
+    deep = DoryPartitionedMotionGateTTCNet(ttc_refinements=7).eval()
+    report = deep.initialize_from_shallower_checkpoint(checkpoint)
+    assert report["source_ttc_refinements"] == 3
+    assert report["target_ttc_refinements"] == 7
+    images = torch.randn(2, 2, 160, 160)
+    onboard = torch.randn(2, 10)
+    with torch.no_grad():
+        shallow_output = shallow(images, onboard)
+        deep_output = deep(images, onboard)
+    for name in shallow_output:
+        torch.testing.assert_close(shallow_output[name], deep_output[name], rtol=0, atol=0)

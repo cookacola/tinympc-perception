@@ -95,6 +95,9 @@ def empty_ttc_metrics():
         "valid": 0, "approaching": 0, "depth_valid": 0, "flow_valid": 0,
         "ttc_abs": 0.0, "approaching_abs": 0.0, "depth_abs": 0.0, "flow_epe": 0.0,
         "critical_tp": 0, "critical_fp": 0, "critical_fn": 0,
+        "regression_critical_tp": 0, "regression_critical_fp": 0,
+        "regression_critical_fn": 0, "critical_ttc_abs": 0.0,
+        "critical_ttc_pixels": 0,
     }
 
 
@@ -113,6 +116,7 @@ def update_ttc_metrics(accumulator, prediction, target):
         & target["ttc_approaching"].bool() & valid
     ).squeeze(1)
     predicted_critical = torch.softmax(prediction["risk_logits"], 1)[:, 2] >= 0.552
+    regression_critical = prediction["inverse_ttc"].squeeze(1) >= 2.0
     valid_2d = valid.squeeze(1)
     accumulator["valid"] += int(valid.sum())
     accumulator["approaching"] += int(approaching.sum())
@@ -125,11 +129,29 @@ def update_ttc_metrics(accumulator, prediction, target):
     accumulator["critical_tp"] += int((predicted_critical & truth_critical).sum())
     accumulator["critical_fp"] += int((predicted_critical & ~truth_critical & valid_2d).sum())
     accumulator["critical_fn"] += int((~predicted_critical & truth_critical).sum())
+    accumulator["regression_critical_tp"] += int(
+        (regression_critical & truth_critical).sum()
+    )
+    accumulator["regression_critical_fp"] += int(
+        (regression_critical & ~truth_critical & valid_2d).sum()
+    )
+    accumulator["regression_critical_fn"] += int(
+        (~regression_critical & truth_critical).sum()
+    )
+    accumulator["critical_ttc_abs"] += float(
+        (ttc_error.squeeze(1) * truth_critical).sum()
+    )
+    accumulator["critical_ttc_pixels"] += int(truth_critical.sum())
 
 
 def finalize_ttc_metrics(accumulator):
     tp, fp, fn = (
         accumulator["critical_tp"], accumulator["critical_fp"], accumulator["critical_fn"]
+    )
+    regression_tp, regression_fp, regression_fn = (
+        accumulator["regression_critical_tp"],
+        accumulator["regression_critical_fp"],
+        accumulator["regression_critical_fn"],
     )
     return {
         "inverse_ttc_mae_s_inv": accumulator["ttc_abs"] / max(accumulator["valid"], 1),
@@ -143,6 +165,18 @@ def finalize_ttc_metrics(accumulator):
         "critical_precision_at_0_552": tp / max(tp + fp, 1),
         "critical_recall_at_0_552": tp / max(tp + fn, 1),
         "critical_counts_at_0_552": {"tp": tp, "fp": fp, "fn": fn},
+        "critical_inverse_ttc_mae_s_inv": (
+            accumulator["critical_ttc_abs"] / max(accumulator["critical_ttc_pixels"], 1)
+        ),
+        "regression_critical_precision": (
+            regression_tp / max(regression_tp + regression_fp, 1)
+        ),
+        "regression_critical_recall": (
+            regression_tp / max(regression_tp + regression_fn, 1)
+        ),
+        "regression_critical_counts": {
+            "tp": regression_tp, "fp": regression_fp, "fn": regression_fn,
+        },
     }
 
 

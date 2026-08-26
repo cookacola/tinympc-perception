@@ -74,3 +74,45 @@ def parent_distillation_loss(student, teacher, temperature=2.0):
     ) * (temperature ** 2) / student["risk_logits"].shape[-2:].numel()
     parts = {**regression, "risk": risk}
     return sum(LOSS_WEIGHTS[name] * value for name, value in parts.items()), parts
+
+
+def critical_motion_conditioned_ttc_loss(
+    prediction,
+    target,
+    critical_regression_weight=1.0,
+    critical_risk_weight=0.5,
+    critical_positive_weight=4.0,
+):
+    """Base objective plus explicit regression and recall pressure on critical pixels."""
+    base, base_parts = motion_conditioned_ttc_loss(prediction, target)
+    valid = target["ttc_valid"].bool()
+    approaching = target["ttc_approaching"].bool() & valid
+    critical = approaching & (risk_class(target["inverse_ttc"]) == 2)
+    critical_regression = _masked_mean(
+        F.smooth_l1_loss(
+            prediction["inverse_ttc"], target["inverse_ttc"], reduction="none"
+        ),
+        critical,
+    )
+    binary_target = critical.squeeze(1).to(prediction["risk_logits"].dtype)
+    critical_log_odds = (
+        prediction["risk_logits"][:, 2]
+        - torch.logsumexp(prediction["risk_logits"][:, :2], dim=1)
+    )
+    critical_binary_values = F.binary_cross_entropy_with_logits(
+        critical_log_odds,
+        binary_target,
+        pos_weight=critical_log_odds.new_tensor(critical_positive_weight),
+        reduction="none",
+    )
+    critical_risk = _masked_mean(critical_binary_values, valid.squeeze(1))
+    total = (
+        base
+        + critical_regression_weight * critical_regression
+        + critical_risk_weight * critical_risk
+    )
+    return total, {
+        **base_parts,
+        "critical_regression": critical_regression,
+        "critical_risk": critical_risk,
+    }

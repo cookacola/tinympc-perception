@@ -21,7 +21,10 @@ from .train_ttc_gate_joint_finetune import (
 from .ttc_gate_data import TTCGateDataset
 from .ttc_motion_gate_dory_model import DoryPartitionedMotionGateTTCNet
 from .ttc_motion_gate_model import MotionConditionedESPNetInverseTTCNet
-from .ttc_motion_losses import motion_conditioned_ttc_loss, parent_distillation_loss
+from .ttc_motion_losses import (
+    critical_motion_conditioned_ttc_loss,
+    parent_distillation_loss,
+)
 
 
 def parse_args():
@@ -36,6 +39,10 @@ def parse_args():
     parser.add_argument("--minimum-learning-rate", type=float, default=2e-6)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--distillation-weight", type=float, default=2.0)
+    parser.add_argument("--ttc-refinements", type=int, default=7)
+    parser.add_argument("--critical-regression-weight", type=float, default=1.0)
+    parser.add_argument("--critical-risk-weight", type=float, default=0.5)
+    parser.add_argument("--critical-positive-weight", type=float, default=4.0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--minimum-epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=6)
@@ -43,7 +50,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def train_epoch(model, teacher, loader, optimizer, device, distillation_weight):
+def train_epoch(model, teacher, loader, optimizer, device, args):
     model.eval()
     model.ttc_head.train()
     total, supervised_total, distill_total, examples = 0.0, 0.0, 0.0, 0
@@ -53,9 +60,15 @@ def train_epoch(model, teacher, loader, optimizer, device, distillation_weight):
             teacher_output = teacher(target["images"], target["onboard_state"])
         optimizer.zero_grad(set_to_none=True)
         prediction = model(target["images"], target["onboard_state"])
-        supervised, _parts = motion_conditioned_ttc_loss(prediction, target)
+        supervised, _parts = critical_motion_conditioned_ttc_loss(
+            prediction,
+            target,
+            critical_regression_weight=args.critical_regression_weight,
+            critical_risk_weight=args.critical_risk_weight,
+            critical_positive_weight=args.critical_positive_weight,
+        )
         distillation, _distill_parts = parent_distillation_loss(prediction, teacher_output)
-        loss = supervised + distillation_weight * distillation
+        loss = supervised + args.distillation_weight * distillation
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.ttc_head.parameters(), 5.0)
         optimizer.step()
@@ -80,16 +93,18 @@ def selection_key(validation):
             "inverse_depth_mae_m_inv", "flow_epe_cells",
         )
     )
-    precision_ratio = values["critical_precision_at_0_552"] / VALIDATION_LIMITS[
-        "critical_precision_at_0_552"
-    ]
-    recall_ratio = values["critical_recall_at_0_552"] / VALIDATION_LIMITS[
-        "critical_recall_at_0_552"
-    ]
+    regression_precision = values["regression_critical_precision"]
+    regression_recall = values["regression_critical_recall"]
+    regression_f1 = (
+        2 * regression_precision * regression_recall
+        / max(regression_precision + regression_recall, 1e-12)
+    )
     return (
         int(validation["retention_passed"]),
+        -values["critical_inverse_ttc_mae_s_inv"],
+        regression_f1,
+        -values["approaching_inverse_ttc_mae_s_inv"],
         -normalized_error,
-        min(precision_ratio, 1.0) + min(recall_ratio, 1.0),
         values["critical_recall_at_0_552"],
     )
 
@@ -115,8 +130,10 @@ def main():
     test_loader = DataLoader(test_set, shuffle=False, **options)
 
     saved = torch.load(args.initial_checkpoint, map_location="cpu", weights_only=False)
-    model = DoryPartitionedMotionGateTTCNet().to(device)
-    model.load_state_dict(saved.get("model", saved))
+    model = DoryPartitionedMotionGateTTCNet(
+        ttc_refinements=args.ttc_refinements
+    ).to(device)
+    expansion = model.initialize_from_shallower_checkpoint(args.initial_checkpoint)
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     for parameter in model.ttc_head.parameters():
@@ -138,12 +155,23 @@ def main():
         "experiment": "dory_motion_ttc_natural_refinement_v1",
         "initial_checkpoint": str(args.initial_checkpoint.resolve()),
         "initial_epoch": saved.get("epoch"),
+        "ttc_head_expansion": expansion,
         "teacher_initialization": teacher_initialization,
         "teacher_is_training_only": True,
         "trainable": ["ttc_head"],
         "encoder_and_gate_frozen": True,
         "natural_sampling": True,
         "distillation_weight": args.distillation_weight,
+        "critical_objective": {
+            "critical_regression_weight": args.critical_regression_weight,
+            "critical_risk_weight": args.critical_risk_weight,
+            "critical_positive_weight": args.critical_positive_weight,
+            "selection_priority": [
+                "complete_retention", "critical_inverse_ttc_mae",
+                "regression_critical_f1", "approaching_inverse_ttc_mae",
+                "aggregate_parent_error", "risk_head_critical_recall",
+            ],
+        },
         "baseline_validation": baseline,
         "validation_limits": VALIDATION_LIMITS,
         "test_limits": TEST_LIMITS,
@@ -160,9 +188,7 @@ def main():
     best_key, history, stale = selection_key(baseline), [], 0
     started = time.time()
     for epoch in range(1, args.epochs + 1):
-        training = train_epoch(
-            model, teacher, train_loader, optimizer, device, args.distillation_weight
-        )
+        training = train_epoch(model, teacher, train_loader, optimizer, device, args)
         validation = evaluate(model, validation_loader, device)
         scheduler.step()
         key = selection_key(validation)
@@ -191,6 +217,8 @@ def main():
             f"flow={values['flow_epe_cells']:.5f} "
             f"precision={values['critical_precision_at_0_552']:.4f} "
             f"recall={values['critical_recall_at_0_552']:.4f} "
+            f"critical_mae={values['critical_inverse_ttc_mae_s_inv']:.5f} "
+            f"regression_recall={values['regression_critical_recall']:.4f} "
             f"retained={validation['retention_passed']} improved={improved}", flush=True,
         )
         if epoch >= args.minimum_epochs and stale >= args.patience:
