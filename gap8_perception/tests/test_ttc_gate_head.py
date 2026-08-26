@@ -16,7 +16,9 @@ from gap8_perception.audit_ttc_gate_dory_graphs import audit_graphs
 from gap8_perception.ttc_motion_gate_dory_model import (
     DoryPartitionedMotionGateTTCNet,
     compact_identity_ttc_blocks,
+    load_dory_checkpoint,
 )
+from gap8_perception.calibrate_ttc_critical_threshold import calibrate
 from gap8_perception.ttc_motion_losses import parent_distillation_loss
 from gap8_perception.train_ttc_gate_joint_finetune import (
     TEST_LIMITS,
@@ -344,3 +346,26 @@ def test_deeper_dory_ttc_head_starts_as_exact_identity_expansion(tmp_path):
         compact_output = compact(images, onboard)
     for name in shallow_output:
         torch.testing.assert_close(shallow_output[name], compact_output[name], rtol=0, atol=0)
+
+
+def test_dory_checkpoint_loader_infers_refinement_depth(tmp_path):
+    original = DoryPartitionedMotionGateTTCNet(ttc_refinements=5).eval()
+    checkpoint = tmp_path / "dory.pt"
+    torch.save({"epoch": 18, "model": original.state_dict()}, checkpoint)
+    loaded, report = load_dory_checkpoint(checkpoint)
+    assert loaded.ttc_refinements == 5
+    assert report["epoch"] == 18
+    assert report["ttc_refinements"] == 5
+    assert all(torch.equal(original.state_dict()[key], value)
+               for key, value in loaded.state_dict().items())
+
+
+def test_critical_threshold_calibration_freezes_precision_constrained_choice():
+    probability = np.asarray([0.9, 0.8, 0.7, 0.6, 0.1])
+    truth = np.asarray([True, False, True, False, False])
+    report = calibrate(probability, truth, (0.60, 0.70))
+    selected = report["precision_constrained"]["0.6"]
+    assert selected["threshold"] == 0.7
+    assert selected["precision"] >= 0.60
+    assert selected["recall"] == 1.0
+    assert report["precision_constrained"]["0.7"]["threshold"] == 0.9

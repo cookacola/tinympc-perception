@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from .ttc_gate_data import TTCGateDataset
 from .ttc_gate_losses import peak_gate_coordinates
-from .ttc_motion_gate_model import MotionConditionedESPNetGateTTCNet
+from .ttc_motion_gate_dory_model import load_dory_checkpoint
 
 
 COLORS_BGR = ((255, 100, 40), (40, 220, 255), (255, 60, 220), (60, 255, 80))
@@ -62,6 +62,8 @@ def scan(model, dataset, device, batch_size, workers):
                            index, record, False)
                     update(candidates, "no_gate_false_alarm", record["mean_visibility_probability"],
                            index, record, True)
+                elif count == 1:
+                    update(candidates, "one_corner", mean_error, index, record, False)
                 elif count == 2:
                     update(candidates, "two_corners", mean_error, index, record, False)
                 elif count == 3:
@@ -158,12 +160,11 @@ def main():
         minimum_gate_span_px=args.minimum_gate_span_px,
         minimum_gate_area_px2=args.minimum_gate_area_px2,
     )
-    model = MotionConditionedESPNetGateTTCNet().to(device)
-    initialization = model.initialize_from_checkpoint(args.checkpoint)
+    model, initialization = load_dory_checkpoint(args.checkpoint, device)
     model.eval()
     candidates = scan(model, dataset, device, args.batch_size, args.workers)
     order = (
-        "no_gate_correct", "two_corners", "three_corners", "full_gate_good",
+        "no_gate_correct", "one_corner", "two_corners", "three_corners", "full_gate_good",
         "full_gate_hard", "no_gate_false_alarm",
     )
     records, panels = [], []

@@ -225,6 +225,28 @@ def dory_graphs(model: DoryPartitionedMotionGateTTCNet):
     }
 
 
+def load_dory_checkpoint(checkpoint: str | Path, device="cpu"):
+    """Load a partitioned checkpoint and infer its TTC refinement depth."""
+    checkpoint = Path(checkpoint)
+    saved = torch.load(checkpoint, map_location=device, weights_only=False)
+    state = saved.get("model", saved)
+    residual_indices = sorted({
+        int(key.split(".")[2])
+        for key in state
+        if key.startswith("ttc_head.deep.") and ".block." in key
+    })
+    if not residual_indices:
+        raise RuntimeError("checkpoint does not contain DORY TTC residual blocks")
+    refinements = max(residual_indices) + 1
+    model = DoryPartitionedMotionGateTTCNet(ttc_refinements=refinements).to(device)
+    model.load_state_dict(state)
+    return model, {
+        "checkpoint": str(checkpoint.resolve()),
+        "epoch": saved.get("epoch"),
+        "ttc_refinements": refinements,
+    }
+
+
 def compact_identity_ttc_blocks(model: DoryPartitionedMotionGateTTCNet):
     """Remove trailing residual blocks whose terminal BN is identically zero."""
     identity = []
